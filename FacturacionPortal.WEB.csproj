@@ -17,7 +17,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="Pages\Auth\" />
     <Folder Include="Pages\Clientes\" />
     <Folder Include="Pages\Articulos\" />
     <Folder Include="Pages\Categorias\" />

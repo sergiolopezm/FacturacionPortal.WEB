@@ -1,0 +1,572 @@
+﻿@page "/login"
+@layout EmptyLayout
+@using FacturacionPortal.WEB.Models.Auth
+@using FacturacionPortal.WEB.Services.Interface
+@using FacturacionPortal.WEB.Shared.Components
+@using FacturacionPortal.WEB.Util
+@using Microsoft.AspNetCore.Components.Forms
+@inject IAuthService AuthService
+@inject NavigationManager Navigation
+@inject IJSRuntime JSRuntime
+
+<PageTitle>Iniciar Sesión - FacturacionPortal</PageTitle>
+
+<div class="login-container">
+    <div class="login-wrapper">
+        <div class="login-card">
+            <div class="login-header text-center mb-4">
+                <div class="login-logo">
+                    <i class="bi bi-receipt-cutoff"></i>
+                </div>
+                <h2 class="login-title">FacturacionPortal</h2>
+                <p class="login-subtitle text-muted">Inicie sesión para acceder al sistema</p>
+            </div>
+
+            <Alert @ref="AlertComponent" />
+
+            <EditForm Model="@LoginModel" OnValidSubmit="@HandleLogin" class="login-form">
+                <DataAnnotationsValidator />
+
+                <div class="form-floating mb-3">
+                    <InputText @bind-Value="LoginModel.NombreUsuario"
+                               class="form-control @(GetFieldCssClass(nameof(LoginModel.NombreUsuario)))"
+                               id="nombreUsuario"
+                               placeholder="Usuario"
+                               disabled="@IsLoading"
+                               @onkeypress="@OnKeyPress" />
+                    <label for="nombreUsuario">
+                        <i class="bi bi-person me-2"></i>Usuario
+                    </label>
+                    <ValidationMessage For="@(() => LoginModel.NombreUsuario)" class="invalid-feedback" />
+                </div>
+
+                <div class="form-floating mb-4">
+                    <InputText @bind-Value="LoginModel.Contraseña"
+                               type="@(ShowPassword ? "text" : "password")"
+                               class="form-control @(GetFieldCssClass(nameof(LoginModel.Contraseña)))"
+                               id="contraseña"
+                               placeholder="Contraseña"
+                               disabled="@IsLoading"
+                               @onkeypress="@OnKeyPress" />
+                    <label for="contraseña">
+                        <i class="bi bi-lock me-2"></i>Contraseña
+                    </label>
+                    <button type="button"
+                            class="btn btn-link position-absolute top-50 end-0 translate-middle-y me-3 p-0 border-0 bg-transparent password-toggle"
+                            @onclick="TogglePasswordVisibility"
+                            tabindex="-1">
+                        <i class="bi @(ShowPassword ? "bi-eye-slash" : "bi-eye")"></i>
+                    </button>
+                    <ValidationMessage For="@(() => LoginModel.Contraseña)" class="invalid-feedback" />
+                </div>
+
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <div class="form-check">
+                        <InputCheckbox @bind-Value="RememberMe" class="form-check-input" id="recordarme" />
+                        <label class="form-check-label" for="recordarme">
+                            Recordarme
+                        </label>
+                    </div>
+                    <a href="/forgot-password" class="text-decoration-none small">
+                        ¿Olvidó su contraseña?
+                    </a>
+                </div>
+
+                <button type="submit"
+                        class="btn btn-primary w-100 mb-3 login-button"
+                        disabled="@(IsLoading || !IsFormValid)">
+                    @if (IsLoading)
+                    {
+                        <span class="spinner-border spinner-border-sm me-2"></span>
+                        <span>Iniciando sesión...</span>
+                    }
+                    else
+                    {
+                        <i class="bi bi-box-arrow-in-right me-2"></i>
+                        <span>Iniciar Sesión</span>
+                    }
+                </button>
+
+                <div class="text-center">
+                    <small class="text-muted">
+                        ¿No tiene cuenta?
+                        <a href="/register" class="text-decoration-none">Regístrese aquí</a>
+                    </small>
+                </div>
+            </EditForm>
+
+            <hr class="my-4">
+
+            <div class="login-info">
+                <div class="row g-3">
+                    <div class="col-md-4 text-center">
+                        <div class="info-item">
+                            <i class="bi bi-shield-check text-success"></i>
+                            <small class="d-block text-muted">Seguro</small>
+                        </div>
+                    </div>
+                    <div class="col-md-4 text-center">
+                        <div class="info-item">
+                            <i class="bi bi-lightning text-warning"></i>
+                            <small class="d-block text-muted">Rápido</small>
+                        </div>
+                    </div>
+                    <div class="col-md-4 text-center">
+                        <div class="info-item">
+                            <i class="bi bi-cloud text-info"></i>
+                            <small class="d-block text-muted">En la nube</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="login-footer text-center mt-4">
+            <small class="text-muted">
+                © @DateTime.Now.Year FacturacionPortal. Todos los derechos reservados.
+            </small>
+        </div>
+    </div>
+
+    <!-- Background Elements -->
+    <div class="login-background">
+        <div class="bg-shape bg-shape-1"></div>
+        <div class="bg-shape bg-shape-2"></div>
+        <div class="bg-shape bg-shape-3"></div>
+    </div>
+</div>
+
+<style>
+    .login-container {
+        min-height: 100vh;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .login-wrapper {
+        width: 100%;
+        max-width: 400px;
+        z-index: 10;
+        position: relative;
+    }
+
+    .login-card {
+        background: rgba(255, 255, 255, 0.95);
+        backdrop-filter: blur(10px);
+        border-radius: 20px;
+        padding: 2.5rem;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    .login-header {
+        margin-bottom: 2rem;
+    }
+
+    .login-logo {
+        width: 80px;
+        height: 80px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 1rem;
+        color: white;
+        font-size: 2rem;
+        box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+    }
+
+    .login-title {
+        color: #2d3748;
+        font-weight: 700;
+        margin-bottom: 0.5rem;
+    }
+
+    .login-subtitle {
+        font-size: 0.9rem;
+    }
+
+    .form-floating {
+        position: relative;
+    }
+
+        .form-floating > .form-control {
+            border-radius: 15px;
+            border: 2px solid #e2e8f0;
+            transition: all 0.3s ease;
+            padding-left: 3rem;
+            height: 60px;
+        }
+
+            .form-floating > .form-control:focus {
+                border-color: #667eea;
+                box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+            }
+
+        .form-floating > label {
+            padding-left: 3rem;
+            color: #64748b;
+            font-weight: 500;
+        }
+
+            .form-floating > label i {
+                position: absolute;
+                left: 1rem;
+                top: 50%;
+                transform: translateY(-50%);
+                color: #94a3b8;
+            }
+
+    .password-toggle {
+        color: #94a3b8 !important;
+        z-index: 5;
+    }
+
+        .password-toggle:hover {
+            color: #667eea !important;
+        }
+
+    .login-button {
+        height: 50px;
+        border-radius: 15px;
+        font-weight: 600;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border: none;
+        transition: all 0.3s ease;
+    }
+
+        .login-button:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        .login-button:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+        }
+
+    .form-check-input:checked {
+        background-color: #667eea;
+        border-color: #667eea;
+    }
+
+    .info-item i {
+        font-size: 1.5rem;
+        margin-bottom: 0.5rem;
+    }
+
+    .login-background {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        z-index: 1;
+    }
+
+    .bg-shape {
+        position: absolute;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.1);
+        animation: float 6s ease-in-out infinite;
+    }
+
+    .bg-shape-1 {
+        width: 200px;
+        height: 200px;
+        top: 10%;
+        left: 10%;
+        animation-delay: 0s;
+    }
+
+    .bg-shape-2 {
+        width: 150px;
+        height: 150px;
+        top: 60%;
+        right: 15%;
+        animation-delay: 2s;
+    }
+
+    .bg-shape-3 {
+        width: 100px;
+        height: 100px;
+        bottom: 20%;
+        left: 20%;
+        animation-delay: 4s;
+    }
+
+    @@keyframes float {
+        0%, 100%
+
+    {
+        transform: translateY(0px);
+    }
+
+    50% {
+        transform: translateY(-20px);
+    }
+
+    }
+
+    .is-invalid {
+        border-color: #dc3545 !important;
+    }
+
+    .invalid-feedback {
+        display: block;
+        margin-top: 0.25rem;
+        font-size: 0.875rem;
+    }
+
+    @@media (max-width: 576px) {
+        .login-card
+
+    {
+        margin: 1rem;
+        padding: 2rem 1.5rem;
+        border-radius: 15px;
+    }
+
+    .login-logo {
+        width: 60px;
+        height: 60px;
+        font-size: 1.5rem;
+    }
+
+    .form-floating > .form-control {
+        height: 55px;
+    }
+
+    .bg-shape {
+        display: none;
+    }
+
+    }
+
+    /* Animaciones adicionales */
+    .login-card {
+        animation: slideInUp 0.8s ease-out;
+    }
+
+    @@keyframes slideInUp {
+        from
+
+    {
+        opacity: 0;
+        transform: translateY(30px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+
+    }
+
+    /* Estados de carga */
+    .login-button .spinner-border-sm {
+        width: 1rem;
+        height: 1rem;
+    }
+
+    /* Efectos de focus mejorados */
+    .form-control:focus {
+        outline: none;
+    }
+
+    .form-floating > .form-control:focus ~ label {
+        color: #667eea;
+    }
+
+        .form-floating > .form-control:focus ~ label i {
+            color: #667eea;
+        }
+</style>
+
+@code {
+    private UsuarioLoginDto LoginModel = new();
+    private Alert? AlertComponent;
+    private bool IsLoading = false;
+    private bool ShowPassword = false;
+    private bool RememberMe = false;
+    private EditContext? EditContext;
+
+    private bool IsFormValid => !string.IsNullOrWhiteSpace(LoginModel.NombreUsuario) &&
+                                !string.IsNullOrWhiteSpace(LoginModel.Contraseña);
+
+    protected override void OnInitialized()
+    {
+        EditContext = new EditContext(LoginModel);
+
+        // Verificar si ya está autenticado
+        CheckIfAlreadyAuthenticated();
+    }
+
+    private async void CheckIfAlreadyAuthenticated()
+    {
+        try
+        {
+            var isAuthenticated = await AuthService.IsAuthenticated();
+            if (isAuthenticated)
+            {
+                var returnUrl = GetReturnUrl();
+                Navigation.NavigateTo(returnUrl, true);
+            }
+        }
+        catch
+        {
+            // Si hay error verificando autenticación, continuar con login
+        }
+    }
+
+    private async Task HandleLogin()
+    {
+        if (IsLoading || !IsFormValid) return;
+
+        try
+        {
+            IsLoading = true;
+            StateHasChanged();
+
+            var result = await AuthService.Login(LoginModel);
+
+            if (result.Success && result.Data != null)
+            {
+                // Login exitoso
+                AlertComponent?.Show(
+                    $"¡Bienvenido, {result.Data.Usuario.NombreCompleto}!",
+                    AlertType.Success,
+                    "Login Exitoso"
+                );
+
+                // Guardar preferencia de recordar usuario
+                if (RememberMe)
+                {
+                    await JSRuntime.InvokeVoidAsync("localStorage.setItem", "rememberUser", LoginModel.NombreUsuario);
+                }
+                else
+                {
+                    await JSRuntime.InvokeVoidAsync("localStorage.removeItem", "rememberUser");
+                }
+
+                // Pequeña pausa para mostrar el mensaje
+                await Task.Delay(1500);
+
+                // Redirigir al dashboard o URL de retorno
+                var returnUrl = GetReturnUrl();
+                Navigation.NavigateTo(returnUrl, true);
+            }
+            else
+            {
+                // Error en login
+                AlertComponent?.Show(
+                    result.Message ?? "Credenciales incorrectas. Verifique su usuario y contraseña.",
+                    AlertType.Danger,
+                    "Error de Autenticación"
+                );
+
+                // Limpiar contraseña por seguridad
+                LoginModel.Contraseña = "";
+                StateHasChanged();
+            }
+        }
+        catch (Exception ex)
+        {
+            AlertComponent?.Show(
+                $"Error de conexión: {ex.Message}",
+                AlertType.Danger,
+                "Error de Conexión"
+            );
+
+            LoginModel.Contraseña = "";
+            StateHasChanged();
+        }
+        finally
+        {
+            IsLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private void TogglePasswordVisibility()
+    {
+        ShowPassword = !ShowPassword;
+    }
+
+    private async Task OnKeyPress(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && IsFormValid && !IsLoading)
+        {
+            await HandleLogin();
+        }
+    }
+
+    private string GetFieldCssClass(string fieldName)
+    {
+        if (EditContext == null) return "";
+
+        var fieldIdentifier = EditContext.Field(fieldName);
+        var isModified = EditContext.IsModified(fieldIdentifier);
+        var isValid = !EditContext.GetValidationMessages(fieldIdentifier).Any();
+
+        if (!isModified) return "";
+
+        return isValid ? "is-valid" : "is-invalid";
+    }
+
+    private string GetReturnUrl()
+    {
+        var uri = new Uri(Navigation.Uri);
+        var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
+        var returnUrl = query["returnUrl"];
+
+        return !string.IsNullOrEmpty(returnUrl) ? returnUrl : "/";
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                // Recuperar usuario recordado si existe
+                var rememberedUser = await JSRuntime.InvokeAsync<string>("localStorage.getItem", "rememberUser");
+                if (!string.IsNullOrEmpty(rememberedUser))
+                {
+                    LoginModel.NombreUsuario = rememberedUser;
+                    RememberMe = true;
+                    StateHasChanged();
+                }
+
+                // Focus en el primer campo vacío
+                if (string.IsNullOrEmpty(LoginModel.NombreUsuario))
+                {
+                    await JSRuntime.InvokeVoidAsync("focusElement", "nombreUsuario");
+                }
+                else
+                {
+                    await JSRuntime.InvokeVoidAsync("focusElement", "contraseña");
+                }
+            }
+            catch
+            {
+                // Ignorar errores de JavaScript
+            }
+        }
+    }
+}
+
+<script>
+    window.focusElement = (elementId) => {
+        const element = document.getElementById(elementId);
+        if (element) {
+            element.focus();
+        }
+    };
+</script>

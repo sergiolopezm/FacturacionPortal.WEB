@@ -1,0 +1,845 @@
+﻿@page "/facturas"
+@using FacturacionPortal.WEB.Helpers
+@using FacturacionPortal.WEB.Models.Facturacion
+@using FacturacionPortal.WEB.Models.Common
+@using FacturacionPortal.WEB.Services.Interface
+@using FacturacionPortal.WEB.Shared.Components
+@using FacturacionPortal.WEB.Components.Shared
+@using FacturacionPortal.WEB.Util
+@using FacturacionPortal.WEB.Util.Extensions
+@using Microsoft.AspNetCore.Components.Authorization
+@inject IFacturaService FacturaService
+@inject IClienteService ClienteService
+@inject NavigationManager Navigation
+@inject IJSRuntime JSRuntime
+
+<PageTitle>Facturas - FacturacionPortal</PageTitle>
+
+<div class="facturas-container">
+    <!-- Header -->
+    <div class="page-header mb-4">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h2 class="mb-1">
+                    <i class="bi bi-receipt-cutoff text-primary me-2"></i>
+                    Gestión de Facturas
+                </h2>
+                <p class="text-muted mb-0">Administre todas las facturas del sistema</p>
+            </div>
+            <div class="d-flex gap-2">
+                <button class="btn btn-outline-secondary" @onclick="ExportarFacturas" disabled="@IsLoading">
+                    <i class="bi bi-download me-1"></i>Exportar
+                </button>
+                <button class="btn btn-primary" @onclick="CrearNuevaFactura">
+                    <i class="bi bi-plus-circle me-1"></i>Nueva Factura
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <Alert @ref="AlertComponent" />
+
+    <!-- Filtros -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-header">
+            <div class="d-flex justify-content-between align-items-center">
+                <h6 class="card-title mb-0">
+                    <i class="bi bi-funnel me-2"></i>Filtros de Búsqueda
+                </h6>
+                <button class="btn btn-link btn-sm p-0" @onclick="ToggleFiltros">
+                    <i class="bi @(MostrarFiltros ? "bi-chevron-up" : "bi-chevron-down")"></i>
+                </button>
+            </div>
+        </div>
+        
+        @if (MostrarFiltros)
+        {
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <label class="form-label">Buscar</label>
+                        <div class="input-group">
+                            <span class="input-group-text">
+                                <i class="bi bi-search"></i>
+                            </span>
+                            <input type="text" 
+                                   class="form-control" 
+                                   placeholder="Número, cliente..." 
+                                   @bind="FiltrosBusqueda.Busqueda"
+                                   @bind:event="oninput"
+                                   @onkeypress="OnBusquedaKeyPress" />
+                            @if (!string.IsNullOrEmpty(FiltrosBusqueda.Busqueda))
+                            {
+                                <button class="btn btn-outline-secondary" @onclick="LimpiarBusqueda">
+                                    <i class="bi bi-x"></i>
+                                </button>
+                            }
+                        </div>
+                    </div>
+
+                    <div class="col-md-2">
+                        <label class="form-label">Estado</label>
+                        <select class="form-select" @bind="FiltrosBusqueda.Estado">
+                            <option value="">Todos</option>
+                            <option value="Activa">Activa</option>
+                            <option value="Anulada">Anulada</option>
+                            <option value="Pagada">Pagada</option>
+                            <option value="Pendiente">Pendiente</option>
+                        </select>
+                    </div>
+
+                    <div class="col-md-2">
+                        <label class="form-label">Cliente</label>
+                        <select class="form-select" @bind="FiltrosBusqueda.ClienteId">
+                            <option value="">Todos los clientes</option>
+                            @if (ClientesDisponibles != null)
+                            {
+                                @foreach (var cliente in ClientesDisponibles)
+                                {
+                                    <option value="@cliente.Id">@cliente.DocumentoNombre</option>
+                                }
+                            }
+                        </select>
+                    </div>
+
+                    <div class="col-md-2">
+                        <label class="form-label">Fecha Desde</label>
+                        <input type="date" 
+                               class="form-control" 
+                               @bind="FiltrosBusqueda.FechaInicio"
+                               max="@DateTime.Now.ToString("yyyy-MM-dd")" />
+                    </div>
+
+                    <div class="col-md-2">
+                        <label class="form-label">Fecha Hasta</label>
+                        <input type="date" 
+                               class="form-control" 
+                               @bind="FiltrosBusqueda.FechaFin"
+                               max="@DateTime.Now.ToString("yyyy-MM-dd")" />
+                    </div>
+
+                    <div class="col-md-1">
+                        <label class="form-label">&nbsp;</label>
+                        <div class="d-flex gap-1">
+                            <button class="btn btn-primary w-100" @onclick="AplicarFiltros" disabled="@IsLoading">
+                                @if (IsLoading)
+                                {
+                                    <span class="spinner-border spinner-border-sm"></span>
+                                }
+                                else
+                                {
+                                    <i class="bi bi-search"></i>
+                                }
+                            </button>
+                            <button class="btn btn-outline-secondary" @onclick="LimpiarFiltros" title="Limpiar">
+                                <i class="bi bi-arrow-clockwise"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+
+    <!-- Estadísticas rápidas -->
+    @if (Estadisticas != null)
+    {
+        <div class="row g-3 mb-4">
+            <div class="col-lg-3 col-md-6">
+                <div class="stat-card card border-0 shadow-sm">
+                    <div class="card-body text-center">
+                        <div class="stat-icon bg-primary text-white rounded-circle mx-auto mb-2">
+                            <i class="bi bi-receipt"></i>
+                        </div>
+                        <h4 class="stat-number text-primary">@Estadisticas.TotalFacturas</h4>
+                        <small class="text-muted">Total Facturas</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-3 col-md-6">
+                <div class="stat-card card border-0 shadow-sm">
+                    <div class="card-body text-center">
+                        <div class="stat-icon bg-success text-white rounded-circle mx-auto mb-2">
+                            <i class="bi bi-currency-dollar"></i>
+                        </div>
+                        <h4 class="stat-number text-success">@Estadisticas.TotalVentasFormateado</h4>
+                        <small class="text-muted">Total Ventas</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-3 col-md-6">
+                <div class="stat-card card border-0 shadow-sm">
+                    <div class="card-body text-center">
+                        <div class="stat-icon bg-info text-white rounded-circle mx-auto mb-2">
+                            <i class="bi bi-calendar-day"></i>
+                        </div>
+                        <h4 class="stat-number text-info">@Estadisticas.FacturasHoy</h4>
+                        <small class="text-muted">Facturas Hoy</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-3 col-md-6">
+                <div class="stat-card card border-0 shadow-sm">
+                    <div class="card-body text-center">
+                        <div class="stat-icon bg-warning text-white rounded-circle mx-auto mb-2">
+                            <i class="bi bi-clock"></i>
+                        </div>
+                        <h4 class="stat-number text-warning">@Estadisticas.FacturasPendientes</h4>
+                        <small class="text-muted">Pendientes</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- Tabla de Facturas -->
+    <div class="card shadow-sm">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <div class="d-flex align-items-center">
+                <h6 class="card-title mb-0 me-3">Lista de Facturas</h6>
+                @if (FacturasPaginadas?.TotalRegistros > 0)
+                {
+                    <small class="text-muted">
+                        (@FacturasPaginadas.TotalRegistros registros encontrados)
+                    </small>
+                }
+            </div>
+            <div class="d-flex align-items-center gap-2">
+                <small class="text-muted me-2">Mostrar:</small>
+                <select class="form-select form-select-sm" style="width: auto;" @onchange="CambiarTamañoPagina">
+                    @foreach (var opcion in Constants.Paginacion.OpcionesPorPagina)
+                    {
+                        <option value="@opcion" selected="@(opcion == ElementosPorPagina)">@opcion</option>
+                    }
+                </select>
+            </div>
+        </div>
+
+        <div class="card-body p-0">
+            @if (IsLoading)
+            {
+                <Loading IsVisible="true" Text="Cargando facturas..." />
+            }
+            else if (FacturasPaginadas?.Lista?.Any() == true)
+            {
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-dark">
+                            <tr>
+                                <th style="width: 50px;">
+                                    <div class="form-check">
+                                        <input class="form-check-input" 
+                                           type="checkbox" 
+                                           checked="@SeleccionarTodas"
+                                           @onchange="OnSeleccionarTodasChanged" />
+                                    </div>
+                                </th>
+                                <th style="width: 120px;">Número</th>
+                                <th style="width: 120px;">Fecha</th>
+                                <th>Cliente</th>
+                                <th class="text-center" style="width: 80px;">Artículos</th>
+                                <th class="text-end" style="width: 120px;">Total</th>
+                                <th class="text-center" style="width: 100px;">Estado</th>
+                                <th class="text-center" style="width: 120px;">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var factura in FacturasPaginadas.Lista)
+                            {
+                                <tr class="@(FacturasSeleccionadas.Contains(factura.Id) ? "table-active" : "")">
+                                    <td>
+                                        <div class="form-check">
+                                            <input class="form-check-input" 
+                                                   type="checkbox" 
+                                                   checked="@FacturasSeleccionadas.Contains(factura.Id)"
+                                                   @onchange="@(args => OnFacturaSeleccionada(factura.Id, (bool)args.Value!))" />
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div class="fw-bold">@factura.NumeroFactura</div>
+                                        <small class="text-muted">ID: @factura.Id</small>
+                                    </td>
+                                    <td>
+                                        <div>@factura.Fecha.ToColombiaShortDateString()</div>
+                                        <small class="text-muted">@factura.Fecha.ToTimeString()</small>
+                                    </td>
+                                    <td>
+                                        <div class="fw-bold">@factura.ClienteNombreCompleto</div>
+                                        <small class="text-muted">@factura.ClienteNumeroDocumento</small>
+                                    </td>
+                                    <td class="text-center">
+                                        <span class="badge bg-secondary">@factura.TotalArticulos</span>
+                                    </td>
+                                    <td class="text-end">
+                                        <CurrencyDisplay Value="@factura.Total" ShowSymbol="true" CssClass="fw-bold" />
+                                    </td>
+                                    <td class="text-center">
+                                        <StatusBadge Status="@factura.Estado" />
+                                    </td>
+                                    <td class="text-center">
+                                        <div class="btn-group btn-group-sm">
+                                            <button class="btn btn-outline-primary" 
+                                                    @onclick="() => VerFactura(factura.Id)"
+                                                    title="Ver detalle">
+                                                <i class="bi bi-eye"></i>
+                                            </button>
+                                            <button class="btn btn-outline-secondary dropdown-toggle dropdown-toggle-split" 
+                                                    data-bs-toggle="dropdown">
+                                                <span class="visually-hidden">Más opciones</span>
+                                            </button>
+                                            <ul class="dropdown-menu">
+                                                <li>
+                                                    <button class="dropdown-item" @onclick="() => EditarFactura(factura.Id)">
+                                                        <i class="bi bi-pencil me-2"></i>Editar
+                                                    </button>
+                                                </li>
+                                                <li>
+                                                    <button class="dropdown-item" @onclick="() => DuplicarFactura(factura.Id)">
+                                                        <i class="bi bi-files me-2"></i>Duplicar
+                                                    </button>
+                                                </li>
+                                                <li>
+                                                    <button class="dropdown-item" @onclick="() => ImprimirFactura(factura.Id)">
+                                                        <i class="bi bi-printer me-2"></i>Imprimir
+                                                    </button>
+                                                </li>
+                                                <li><hr class="dropdown-divider"></li>
+                                                @if (factura.Estado == "Activa")
+                                                {
+                                                    <li>
+                                                        <button class="dropdown-item text-warning" @onclick="() => AnularFactura(factura)">
+                                                            <i class="bi bi-x-circle me-2"></i>Anular
+                                                        </button>
+                                                    </li>
+                                                }
+                                            </ul>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Paginación -->
+                @if (FacturasPaginadas.TotalPaginas > 1)
+                {
+                    <div class="card-footer">
+                        <Pagination TItem="FacturaDto"
+                                    PaginationInfo="@FacturasPaginadas"
+                                    OnPageChanged="@CambiarPagina"
+                                    OnPageSizeChanged="@CambiarTamañoPaginaEvent"
+                                    CurrentPageSize="@ElementosPorPagina"
+                                    ShowInfo="true"
+                                    ShowPageSizeSelector="false" />
+                    </div>
+                }
+            }
+            else
+            {
+                <div class="text-center py-5">
+                    <i class="bi bi-receipt display-1 text-muted"></i>
+                    <h4 class="mt-3">No hay facturas disponibles</h4>
+                    <p class="text-muted">
+                        @if (TieneFiltrosActivos())
+                        {
+                            <span>No se encontraron facturas con los filtros aplicados.</span>
+                        }
+                        else
+                        {
+                            <span>Aún no se han creado facturas en el sistema.</span>
+                        }
+                    </p>
+                    <div class="mt-3">
+                        @if (TieneFiltrosActivos())
+                        {
+                            <button class="btn btn-outline-primary me-2" @onclick="LimpiarFiltros">
+                                <i class="bi bi-funnel me-1"></i>Limpiar Filtros
+                            </button>
+                        }
+                        <button class="btn btn-primary" @onclick="CrearNuevaFactura">
+                            <i class="bi bi-plus-circle me-1"></i>Crear Primera Factura
+                        </button>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+
+    <!-- Acciones masivas -->
+    @if (FacturasSeleccionadas.Any())
+    {
+        <div class="floating-actions">
+            <div class="card shadow">
+                <div class="card-body p-3">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <span class="fw-bold">@FacturasSeleccionadas.Count factura(s) seleccionada(s)</span>
+                        <div class="d-flex gap-2">
+                            <button class="btn btn-sm btn-outline-primary" @onclick="ExportarSeleccionadas">
+                                <i class="bi bi-download me-1"></i>Exportar
+                            </button>
+                            <button class="btn btn-sm btn-outline-secondary" @onclick="ImprimirSeleccionadas">
+                                <i class="bi bi-printer me-1"></i>Imprimir
+                            </button>
+                            <button class="btn btn-sm btn-outline-danger" @onclick="LimpiarSeleccion">
+                                <i class="bi bi-x me-1"></i>Cancelar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<Confirm @ref="ConfirmDialog" />
+
+<style>
+    .facturas-container {
+        padding: 1rem;
+    }
+
+    .page-header {
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        padding: 1.5rem;
+        border-radius: 0.5rem;
+        border-left: 4px solid var(--bs-primary);
+    }
+
+    .stat-card {
+        transition: transform 0.2s ease-in-out;
+    }
+
+    .stat-card:hover {
+        transform: translateY(-2px);
+    }
+
+    .stat-icon {
+        width: 50px;
+        height: 50px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.25rem;
+    }
+
+    .stat-number {
+        font-size: 1.5rem;
+        font-weight: 700;
+        margin-bottom: 0.25rem;
+    }
+
+    .card {
+        border: none;
+        box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    }
+
+    .card-header {
+        background-color: var(--bs-light);
+        border-bottom: 1px solid var(--bs-border-color);
+    }
+
+    .table th {
+        font-weight: 600;
+        font-size: 0.875rem;
+        border-bottom: 2px solid #dee2e6;
+    }
+
+    .table td {
+        vertical-align: middle;
+        font-size: 0.875rem;
+    }
+
+    .floating-actions {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        z-index: 1050;
+        min-width: 350px;
+    }
+
+    .dropdown-menu {
+        box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+        border: none;
+    }
+
+    .dropdown-item {
+        font-size: 0.875rem;
+        padding: 0.5rem 1rem;
+    }
+
+    .dropdown-item:hover {
+        background-color: var(--bs-light);
+    }
+
+    @@media (max-width: 768px) {
+        .page-header {
+            padding: 1rem;
+        }
+
+        .floating-actions {
+            position: relative;
+            bottom: auto;
+            right: auto;
+            margin-top: 1rem;
+            min-width: auto;
+        }
+
+        .table-responsive {
+            font-size: 0.8rem;
+        }
+
+        .btn-group-sm .btn {
+            padding: 0.25rem 0.4rem;
+            font-size: 0.75rem;
+        }
+    }
+</style>
+
+@code {
+    private Alert? AlertComponent;
+    private Confirm? ConfirmDialog;
+
+    private bool IsLoading = true;
+    private bool MostrarFiltros = true;
+    private bool SeleccionarTodas = false;
+    private int PaginaActual = 1;
+    private int ElementosPorPagina = Constants.Paginacion.ElementosPorPaginaDefault;
+
+    private PaginacionDto<FacturaDto>? FacturasPaginadas;
+    private List<ClienteDto>? ClientesDisponibles;
+    private EstadisticasFacturas? Estadisticas;
+    private HashSet<int> FacturasSeleccionadas = new();
+
+    private FiltrosBusquedaFacturas FiltrosBusqueda = new();
+    private Timer? _searchTimer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Task.WhenAll(
+            CargarClientes(),
+            CargarFacturas(),
+            CargarEstadisticas()
+        );
+    }
+
+    private async Task CargarClientes()
+    {
+        try
+        {
+            var result = await ClienteService.GetAll();
+            if (result.Success && result.Data != null)
+            {
+                ClientesDisponibles = result.Data.Where(c => c.Activo).Take(100).ToList();
+            }
+        }
+        catch (Exception)
+        {
+            ClientesDisponibles = new List<ClienteDto>();
+        }
+    }
+
+    private async Task CargarFacturas()
+    {
+        try
+        {
+            IsLoading = true;
+            StateHasChanged();
+
+            var clienteId = FiltrosBusqueda.ClienteId > 0 ? FiltrosBusqueda.ClienteId : (int?)null;
+
+            var result = await FacturaService.GetPaginated(
+                PaginaActual,
+                ElementosPorPagina,
+                FiltrosBusqueda.Busqueda,
+                FiltrosBusqueda.FechaInicio,
+                FiltrosBusqueda.FechaFin,
+                FiltrosBusqueda.Estado,
+                clienteId
+            );
+
+            if (result.Success && result.Data != null)
+            {
+                FacturasPaginadas = result.Data;
+            }
+            else
+            {
+                FacturasPaginadas = new PaginacionDto<FacturaDto>
+                {
+                    Lista = new List<FacturaDto>(),
+                    Pagina = 1,
+                    TotalPaginas = 1,
+                    TotalRegistros = 0,
+                    ElementosPorPagina = ElementosPorPagina
+                };
+
+                if (!string.IsNullOrEmpty(result.Message))
+                {
+                    AlertComponent?.Show(result.Message, AlertType.Warning);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            AlertComponent?.Show($"Error al cargar facturas: {ex.Message}", AlertType.Danger);
+            FacturasPaginadas = new PaginacionDto<FacturaDto>
+            {
+                Lista = new List<FacturaDto>(),
+                Pagina = 1,
+                TotalPaginas = 1,
+                TotalRegistros = 0,
+                ElementosPorPagina = ElementosPorPagina
+            };
+        }
+        finally
+        {
+            IsLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task CargarEstadisticas()
+    {
+        try
+        {
+            // Simular estadísticas (en una implementación real, esto vendría de la API)
+            var totalFacturas = FacturasPaginadas?.TotalRegistros ?? 0;
+            var ventasHoy = 2850000m;
+            var facturasHoy = 12;
+            var facturasPendientes = 3;
+
+            Estadisticas = new EstadisticasFacturas
+            {
+                TotalFacturas = totalFacturas,
+                TotalVentas = ventasHoy,
+                TotalVentasFormateado = CurrencyHelper.FormatCurrency(ventasHoy),
+                FacturasHoy = facturasHoy,
+                FacturasPendientes = facturasPendientes
+            };
+        }
+        catch (Exception)
+        {
+            Estadisticas = new EstadisticasFacturas();
+        }
+    }
+
+    private void ToggleFiltros()
+    {
+        MostrarFiltros = !MostrarFiltros;
+    }
+
+    private async Task OnBusquedaKeyPress(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            _searchTimer?.Dispose();
+            await AplicarFiltros();
+        }
+        else
+        {
+            SetSearchTimer();
+        }
+    }
+
+    private void SetSearchTimer()
+    {
+        _searchTimer?.Dispose();
+        _searchTimer = new Timer(async _ =>
+        {
+            await InvokeAsync(AplicarFiltros);
+        }, null, 500, Timeout.Infinite);
+    }
+
+    private async Task AplicarFiltros()
+    {
+        PaginaActual = 1;
+        await CargarFacturas();
+    }
+
+    private async Task LimpiarFiltros()
+    {
+        FiltrosBusqueda = new FiltrosBusquedaFacturas();
+        PaginaActual = 1;
+        await CargarFacturas();
+    }
+
+    private void LimpiarBusqueda()
+    {
+        FiltrosBusqueda.Busqueda = "";
+    }
+
+    private async Task CambiarPagina(int nuevaPagina)
+    {
+        PaginaActual = nuevaPagina;
+        await CargarFacturas();
+    }
+
+    private async Task CambiarTamañoPagina(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out int nuevoTamaño))
+        {
+            ElementosPorPagina = nuevoTamaño;
+            PaginaActual = 1;
+            await CargarFacturas();
+        }
+    }
+
+    private async Task CambiarTamañoPaginaEvent(int nuevoTamaño)
+    {
+        ElementosPorPagina = nuevoTamaño;
+        PaginaActual = 1;
+        await CargarFacturas();
+    }
+
+   private void OnSeleccionarTodasChanged(ChangeEventArgs e)
+    {
+        var seleccionar = (bool)(e.Value ?? false);
+        SeleccionarTodas = seleccionar;
+    
+        if (seleccionar)
+        {
+            foreach (var factura in FacturasPaginadas?.Lista ?? new List<FacturaDto>())
+            {
+                FacturasSeleccionadas.Add(factura.Id);
+            }
+        }
+        else
+        {
+            FacturasSeleccionadas.Clear();
+        }
+    }
+
+    private void OnFacturaSeleccionada(int facturaId, bool seleccionada)
+    {
+        if (seleccionada)
+        {
+            FacturasSeleccionadas.Add(facturaId);
+        }
+        else
+        {
+            FacturasSeleccionadas.Remove(facturaId);
+        }
+
+        // Actualizar el estado de "Seleccionar todas"
+        var totalFacturas = FacturasPaginadas?.Lista?.Count() ?? 0;
+        SeleccionarTodas = totalFacturas > 0 && FacturasSeleccionadas.Count == totalFacturas;
+    }
+
+    private void LimpiarSeleccion()
+    {
+        FacturasSeleccionadas.Clear();
+        SeleccionarTodas = false;
+    }
+
+    private bool TieneFiltrosActivos()
+    {
+        return !string.IsNullOrEmpty(FiltrosBusqueda.Busqueda) ||
+               !string.IsNullOrEmpty(FiltrosBusqueda.Estado) ||
+               FiltrosBusqueda.ClienteId > 0 ||
+               FiltrosBusqueda.FechaInicio.HasValue ||
+               FiltrosBusqueda.FechaFin.HasValue;
+    }
+
+    // Navegación
+    private void CrearNuevaFactura()
+    {
+        Navigation.NavigateTo("/facturas/crear");
+    }
+
+    private void VerFactura(int facturaId)
+    {
+        Navigation.NavigateTo($"/facturas/{facturaId}");
+    }
+
+    private void EditarFactura(int facturaId)
+    {
+        Navigation.NavigateTo($"/facturas/{facturaId}/editar");
+    }
+
+    // Acciones
+    private async Task AnularFactura(FacturaDto factura)
+    {
+        if (ConfirmDialog != null)
+        {
+            var confirmado = await ConfirmDialog.ShowAsync(
+                "Anular Factura",
+                $"¿Está seguro que desea anular la factura {factura.NumeroFactura}? Esta acción no se puede deshacer.",
+                ConfirmType.Danger
+            );
+
+            if (confirmado)
+            {
+                try
+                {
+                    var result = await FacturaService.Anular(factura.Id, "Anulada desde lista de facturas");
+                    if (result.Success)
+                    {
+                        AlertComponent?.Show("Factura anulada exitosamente", AlertType.Success);
+                        await CargarFacturas();
+                    }
+                    else
+                    {
+                        AlertComponent?.Show(result.Message ?? "Error al anular la factura", AlertType.Danger);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    AlertComponent?.Show($"Error: {ex.Message}", AlertType.Danger);
+                }
+            }
+        }
+    }
+
+    private async Task DuplicarFactura(int facturaId)
+    {
+        Navigation.NavigateTo($"/facturas/crear?duplicar={facturaId}");
+        await Task.CompletedTask;
+    }
+
+    private async Task ImprimirFactura(int facturaId)
+    {
+        await JSRuntime.InvokeVoidAsync("window.open", $"/facturas/{facturaId}/imprimir", "_blank");
+    }
+
+    private async Task ExportarFacturas()
+    {
+        AlertComponent?.Show("Función de exportación próximamente disponible", AlertType.Info);
+        await Task.CompletedTask;
+    }
+
+    private async Task ExportarSeleccionadas()
+    {
+        AlertComponent?.Show($"Exportando {FacturasSeleccionadas.Count} facturas seleccionadas", AlertType.Info);
+        await Task.CompletedTask;
+    }
+
+    private async Task ImprimirSeleccionadas()
+    {
+        AlertComponent?.Show($"Imprimiendo {FacturasSeleccionadas.Count} facturas seleccionadas", AlertType.Info);
+        await Task.CompletedTask;
+    }
+
+    public void Dispose()
+    {
+        _searchTimer?.Dispose();
+    }
+
+    // Clases auxiliares
+    public class FiltrosBusquedaFacturas
+    {
+        public string Busqueda { get; set; } = "";
+        public string Estado { get; set; } = "";
+        public int ClienteId { get; set; } = 0;
+        public DateTime? FechaInicio { get; set; }
+        public DateTime? FechaFin { get; set; }
+    }
+
+    public class EstadisticasFacturas
+    {
+        public int TotalFacturas { get; set; }
+        public decimal TotalVentas { get; set; }
+        public string TotalVentasFormateado { get; set; } = "$0";
+        public int FacturasHoy { get; set; }
+        public int FacturasPendientes { get; set; }
+    }
+}

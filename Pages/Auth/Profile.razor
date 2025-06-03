@@ -1,0 +1,754 @@
+﻿@page "/perfil"
+@using FacturacionPortal.WEB.Models.Auth
+@using FacturacionPortal.WEB.Services.Interface
+@using FacturacionPortal.WEB.Shared.Components
+@using FacturacionPortal.WEB.Util
+@using FacturacionPortal.WEB.Util.Extensions
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Components.Forms
+@using System.ComponentModel.DataAnnotations
+@attribute [Authorize]
+@inject IAuthService AuthService
+@inject NavigationManager Navigation
+@inject IJSRuntime JSRuntime
+
+<PageTitle>Mi Perfil - FacturacionPortal</PageTitle>
+
+<div class="profile-container">
+    <!-- Header -->
+    <div class="profile-header mb-4">
+        <div class="row align-items-center">
+            <div class="col-md-8">
+                <h2 class="mb-1">
+                    <i class="bi bi-person-circle text-primary me-2"></i>
+                    Mi Perfil
+                </h2>
+                <p class="text-muted mb-0">Administre su información personal y configuraciones</p>
+            </div>
+            <div class="col-md-4 text-end">
+                <button class="btn btn-outline-secondary" @onclick="GoBack">
+                    <i class="bi bi-arrow-left me-1"></i>Volver
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <Alert @ref="AlertComponent" />
+
+    @if (IsLoading)
+    {
+        <Loading IsVisible="true" Text="Cargando perfil..." />
+    }
+    else if (UsuarioPerfil != null)
+    {
+        <div class="row g-4">
+            <!-- Columna Izquierda: Información del Usuario -->
+            <div class="col-lg-4">
+                <!-- Tarjeta de Perfil -->
+                <div class="card profile-card shadow-sm mb-4">
+                    <div class="card-body text-center">
+                        <div class="profile-avatar mb-3">
+                            <div class="avatar-placeholder">
+                                <i class="bi bi-person-fill"></i>
+                            </div>
+                            <button class="btn btn-sm btn-primary avatar-edit-btn" 
+                                    @onclick="ShowAvatarUpload" 
+                                    title="Cambiar foto">
+                                <i class="bi bi-camera"></i>
+                            </button>
+                        </div>
+                        
+                        <h4 class="mb-1">@UsuarioPerfil.NombreCompleto</h4>
+                        <p class="text-muted mb-2">@UsuarioPerfil.Email</p>
+                        
+                        <div class="profile-badges mb-3">
+                            <span class="badge bg-primary">@UsuarioPerfil.Rol</span>
+                            <span class="badge @(UsuarioPerfil.Activo ? "bg-success" : "bg-danger")">
+                                @(UsuarioPerfil.Activo ? "Activo" : "Inactivo")
+                            </span>
+                        </div>
+
+                        <div class="profile-stats">
+                            <div class="row text-center">
+                                <div class="col-6">
+                                    <div class="stat-item">
+                                        <h5 class="stat-number">@DiasRegistrado</h5>
+                                        <small class="text-muted">Días registrado</small>
+                                    </div>
+                                </div>
+                                <div class="col-6">
+                                    <div class="stat-item">
+                                        <h5 class="stat-number">@TotalSesiones</h5>
+                                        <small class="text-muted">Sesiones</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Información de Cuenta -->
+                <div class="card shadow-sm">
+                    <div class="card-header">
+                        <h6 class="card-title mb-0">
+                            <i class="bi bi-info-circle me-2"></i>Información de Cuenta
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="info-item">
+                            <small class="text-muted">ID de Usuario</small>
+                            <div class="fw-bold">@UsuarioPerfil.Id</div>
+                        </div>
+                        
+                        <div class="info-item">
+                            <small class="text-muted">Fecha de Registro</small>
+                            <div class="fw-bold">@UsuarioPerfil.FechaCreacion.ToColombiaShortDateString()</div>
+                        </div>
+                        
+                        <div class="info-item">
+                            <small class="text-muted">Último Acceso</small>
+                            <div class="fw-bold">
+                                @(UsuarioPerfil.FechaUltimoAcceso?.ToColombiaLongDateString() ?? "Nunca")
+                            </div>
+                        </div>
+                        
+                        <div class="info-item mb-0">
+                            <small class="text-muted">Tipo de Cuenta</small>
+                            <div class="fw-bold">@UsuarioPerfil.Rol</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Columna Derecha: Formularios de Edición -->
+            <div class="col-lg-8">
+                <!-- Información Personal -->
+                <div class="card shadow-sm mb-4">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h6 class="card-title mb-0">
+                            <i class="bi bi-person me-2"></i>Información Personal
+                        </h6>
+                        @if (!IsEditingPersonal)
+                        {
+                            <button class="btn btn-outline-primary btn-sm" @onclick="StartEditPersonal">
+                                <i class="bi bi-pencil me-1"></i>Editar
+                            </button>
+                        }
+                    </div>
+                    <div class="card-body">
+                        @if (IsEditingPersonal)
+                        {
+                            <EditForm Model="@PersonalForm" OnValidSubmit="@SavePersonalInfo">
+                                <DataAnnotationsValidator />
+                                
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label class="form-label">Nombre *</label>
+                                            <InputText @bind-Value="PersonalForm.Nombre" class="form-control" />
+                                            <ValidationMessage For="@(() => PersonalForm.Nombre)" />
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label class="form-label">Apellido *</label>
+                                            <InputText @bind-Value="PersonalForm.Apellido" class="form-control" />
+                                            <ValidationMessage For="@(() => PersonalForm.Apellido)" />
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label class="form-label">Email *</label>
+                                    <InputText @bind-Value="PersonalForm.Email" class="form-control" type="email" />
+                                    <ValidationMessage For="@(() => PersonalForm.Email)" />
+                                </div>
+
+                                <div class="d-flex gap-2">
+                                    <button type="submit" class="btn btn-success" disabled="@IsSaving">
+                                        @if (IsSaving)
+                                        {
+                                            <span class="spinner-border spinner-border-sm me-1"></span>
+                                        }
+                                        else
+                                        {
+                                            <i class="bi bi-check me-1"></i>
+                                        }
+                                        Guardar Cambios
+                                    </button>
+                                    <button type="button" class="btn btn-secondary" @onclick="CancelEditPersonal">
+                                        <i class="bi bi-x me-1"></i>Cancelar
+                                    </button>
+                                </div>
+                            </EditForm>
+                        }
+                        else
+                        {
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <small class="text-muted">Nombre</small>
+                                        <div class="fw-bold">@UsuarioPerfil.Nombre</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <small class="text-muted">Apellido</small>
+                                        <div class="fw-bold">@UsuarioPerfil.Apellido</div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="mb-0">
+                                <small class="text-muted">Email</small>
+                                <div class="fw-bold">@UsuarioPerfil.Email</div>
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <!-- Cambio de Contraseña -->
+                <div class="card shadow-sm mb-4">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h6 class="card-title mb-0">
+                            <i class="bi bi-shield-lock me-2"></i>Seguridad
+                        </h6>
+                        @if (!IsChangingPassword)
+                        {
+                            <button class="btn btn-outline-warning btn-sm" @onclick="StartChangePassword">
+                                <i class="bi bi-key me-1"></i>Cambiar Contraseña
+                            </button>
+                        }
+                    </div>
+                    <div class="card-body">
+                        @if (IsChangingPassword)
+                        {
+                            <EditForm Model="@PasswordForm" OnValidSubmit="@ChangePassword">
+                                <DataAnnotationsValidator />
+                                
+                                <div class="mb-3">
+                                    <label class="form-label">Contraseña Actual *</label>
+                                    <InputText @bind-Value="PasswordForm.ContraseñaActual" 
+                                               type="password" 
+                                               class="form-control" />
+                                    <ValidationMessage For="@(() => PasswordForm.ContraseñaActual)" />
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label class="form-label">Nueva Contraseña *</label>
+                                    <InputText @bind-Value="PasswordForm.NuevaContraseña" 
+                                               type="password" 
+                                               class="form-control" />
+                                    <ValidationMessage For="@(() => PasswordForm.NuevaContraseña)" />
+                                    <div class="form-text">Mínimo 6 caracteres</div>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label class="form-label">Confirmar Nueva Contraseña *</label>
+                                    <InputText @bind-Value="PasswordForm.ConfirmarContraseña" 
+                                               type="password" 
+                                               class="form-control" />
+                                    <ValidationMessage For="@(() => PasswordForm.ConfirmarContraseña)" />
+                                </div>
+
+                                <div class="d-flex gap-2">
+                                    <button type="submit" class="btn btn-warning" disabled="@IsSaving">
+                                        @if (IsSaving)
+                                        {
+                                            <span class="spinner-border spinner-border-sm me-1"></span>
+                                        }
+                                        else
+                                        {
+                                            <i class="bi bi-shield-check me-1"></i>
+                                        }
+                                        Cambiar Contraseña
+                                    </button>
+                                    <button type="button" class="btn btn-secondary" @onclick="CancelChangePassword">
+                                        <i class="bi bi-x me-1"></i>Cancelar
+                                    </button>
+                                </div>
+                            </EditForm>
+                        }
+                        else
+                        {
+                            <div class="d-flex align-items-center">
+                                <i class="bi bi-shield-check text-success me-2"></i>
+                                <span>Su contraseña está protegida de forma segura</span>
+                            </div>
+                            <small class="text-muted">
+                                Última actualización: Hace @DiasUltimaActualizacion días
+                            </small>
+                        }
+                    </div>
+                </div>
+
+                <!-- Configuraciones -->
+                <div class="card shadow-sm">
+                    <div class="card-header">
+                        <h6 class="card-title mb-0">
+                            <i class="bi bi-gear me-2"></i>Configuraciones
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-check form-switch mb-3">
+                                    <input class="form-check-input" type="checkbox" 
+                                           id="notificacionesEmail" 
+                                           @bind="ConfiguracionNotificaciones.Email">
+                                    <label class="form-check-label" for="notificacionesEmail">
+                                        Notificaciones por email
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-check form-switch mb-3">
+                                    <input class="form-check-input" type="checkbox" 
+                                           id="notificacionesSistema" 
+                                           @bind="ConfiguracionNotificaciones.Sistema">
+                                    <label class="form-check-label" for="notificacionesSistema">
+                                        Notificaciones del sistema
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="d-flex gap-2">
+                            <button class="btn btn-primary btn-sm" @onclick="SavePreferences" disabled="@IsSaving">
+                                @if (IsSaving)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-1"></span>
+                                }
+                                else
+                                {
+                                    <i class="bi bi-check me-1"></i>
+                                }
+                                Guardar Configuración
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="text-center py-5">
+            <i class="bi bi-exclamation-triangle display-1 text-warning"></i>
+            <h3 class="mt-3">Error al cargar el perfil</h3>
+            <p class="text-muted">No se pudo obtener la información del usuario</p>
+            <button class="btn btn-primary" @onclick="LoadProfile">
+                <i class="bi bi-arrow-clockwise me-1"></i>Reintentar
+            </button>
+        </div>
+    }
+</div>
+
+<style>
+    .profile-container {
+        padding: 1rem;
+    }
+
+    .profile-header {
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        padding: 1.5rem;
+        border-radius: 0.5rem;
+        border-left: 4px solid var(--bs-primary);
+    }
+
+    .profile-card {
+        border: none;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+    }
+
+    .profile-avatar {
+        position: relative;
+        display: inline-block;
+    }
+
+    .avatar-placeholder {
+        width: 120px;
+        height: 120px;
+        background: rgba(255, 255, 255, 0.2);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 3rem;
+        color: white;
+        margin: 0 auto;
+    }
+
+    .avatar-edit-btn {
+        position: absolute;
+        bottom: 10px;
+        right: 10px;
+        width: 35px;
+        height: 35px;
+        border-radius: 50%;
+        padding: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .profile-badges .badge {
+        margin: 0 0.25rem;
+    }
+
+    .profile-stats {
+        margin-top: 1rem;
+        padding-top: 1rem;
+        border-top: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    .stat-item .stat-number {
+        color: white;
+        font-weight: 700;
+        margin-bottom: 0.25rem;
+    }
+
+    .info-item {
+        margin-bottom: 1rem;
+        padding-bottom: 0.75rem;
+        border-bottom: 1px solid var(--bs-border-color);
+    }
+
+    .info-item:last-child {
+        border-bottom: none;
+        margin-bottom: 0;
+        padding-bottom: 0;
+    }
+
+    .card {
+        border: none;
+        box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    }
+
+    .card-header {
+        background-color: var(--bs-light);
+        border-bottom: 1px solid var(--bs-border-color);
+    }
+
+    .form-check-input:checked {
+        background-color: var(--bs-primary);
+        border-color: var(--bs-primary);
+    }
+
+    @@media (max-width: 768px) {
+        .profile-header {
+            padding: 1rem;
+        }
+
+        .avatar-placeholder {
+            width: 100px;
+            height: 100px;
+            font-size: 2.5rem;
+        }
+
+        .profile-stats .row {
+            text-align: center;
+        }
+    }
+</style>
+
+@code {
+    private UsuarioPerfilDto? UsuarioPerfil;
+    private Alert? AlertComponent;
+
+    private bool IsLoading = true;
+    private bool IsSaving = false;
+    private bool IsEditingPersonal = false;
+    private bool IsChangingPassword = false;
+
+    private PersonalInfoForm PersonalForm = new();
+    private PasswordChangeForm PasswordForm = new();
+    private NotificationSettings ConfiguracionNotificaciones = new();
+
+    private int DiasRegistrado = 0;
+    private int TotalSesiones = 0;
+    private int DiasUltimaActualizacion = 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadProfile();
+    }
+
+    private async Task LoadProfile()
+    {
+        try
+        {
+            IsLoading = true;
+            StateHasChanged();
+
+            var result = await AuthService.GetProfile();
+            if (result.Success && result.Data != null)
+            {
+                UsuarioPerfil = result.Data;
+                InitializeForms();
+                CalculateStats();
+            }
+            else
+            {
+                AlertComponent?.Show(
+                    result.Message ?? "Error al cargar el perfil del usuario",
+                    AlertType.Danger,
+                    "Error"
+                );
+            }
+        }
+        catch (Exception ex)
+        {
+            AlertComponent?.Show(
+                $"Error de conexión: {ex.Message}",
+                AlertType.Danger,
+                "Error"
+            );
+        }
+        finally
+        {
+            IsLoading = false;
+            StateHasChanged();
+        }
+    }
+
+   private async Task GoBack()
+    {
+        try
+        {
+            // Usa el módulo JavaScript para navegar hacia atrás
+            var success = await JSRuntime.InvokeAsync<bool>("navigationManager.goBack");
+            if (!success)
+            {
+                // Si no se puede navegar hacia atrás, ir a la página de inicio
+                Navigation.NavigateTo("/");
+            }
+        }
+        catch
+        {
+            // Si falla, navega a una ruta predeterminada
+            Navigation.NavigateTo("/");
+        }
+    }
+
+    private void InitializeForms()
+    {
+        if (UsuarioPerfil == null) return;
+
+        PersonalForm = new PersonalInfoForm
+        {
+            Nombre = UsuarioPerfil.Nombre,
+            Apellido = UsuarioPerfil.Apellido,
+            Email = UsuarioPerfil.Email
+        };
+
+        PasswordForm = new PasswordChangeForm();
+        
+        // Cargar configuraciones (simuladas por ahora)
+        ConfiguracionNotificaciones = new NotificationSettings
+        {
+            Email = true,
+            Sistema = true
+        };
+    }
+
+    private void CalculateStats()
+    {
+        if (UsuarioPerfil == null) return;
+
+        DiasRegistrado = (DateTime.Now - UsuarioPerfil.FechaCreacion).Days;
+        TotalSesiones = DiasRegistrado > 0 ? DiasRegistrado / 2 : 1; // Simulado
+        DiasUltimaActualizacion = 15; // Simulado
+    }
+
+    private void StartEditPersonal()
+    {
+        IsEditingPersonal = true;
+        InitializeForms();
+    }
+
+    private void CancelEditPersonal()
+    {
+        IsEditingPersonal = false;
+        InitializeForms();
+    }
+
+    private async Task SavePersonalInfo()
+    {
+        try
+        {
+            IsSaving = true;
+            StateHasChanged();
+
+            // Aquí implementarías la llamada al servicio para actualizar
+            // Por ahora simulo una actualización exitosa
+            await Task.Delay(1000);
+
+            // Actualizar los datos locales
+            if (UsuarioPerfil != null)
+            {
+                UsuarioPerfil.Nombre = PersonalForm.Nombre;
+                UsuarioPerfil.Apellido = PersonalForm.Apellido;
+                UsuarioPerfil.Email = PersonalForm.Email;
+            }
+
+            AlertComponent?.Show(
+                "Información personal actualizada exitosamente",
+                AlertType.Success,
+                "Actualización Exitosa"
+            );
+
+            IsEditingPersonal = false;
+        }
+        catch (Exception ex)
+        {
+            AlertComponent?.Show(
+                $"Error al actualizar la información: {ex.Message}",
+                AlertType.Danger,
+                "Error"
+            );
+        }
+        finally
+        {
+            IsSaving = false;
+            StateHasChanged();
+        }
+    }
+
+    private void StartChangePassword()
+    {
+        IsChangingPassword = true;
+        PasswordForm = new PasswordChangeForm();
+    }
+
+    private void CancelChangePassword()
+    {
+        IsChangingPassword = false;
+        PasswordForm = new PasswordChangeForm();
+    }
+
+    private async Task ChangePassword()
+    {
+        try
+        {
+            IsSaving = true;
+            StateHasChanged();
+
+            // Validar que las contraseñas coincidan
+            if (PasswordForm.NuevaContraseña != PasswordForm.ConfirmarContraseña)
+            {
+                AlertComponent?.Show(
+                    "Las contraseñas no coinciden",
+                    AlertType.Warning,
+                    "Validación"
+                );
+                return;
+            }
+
+            // Aquí implementarías la llamada al servicio para cambiar contraseña
+            await Task.Delay(1000);
+
+            AlertComponent?.Show(
+                "Contraseña cambiada exitosamente",
+                AlertType.Success,
+                "Contraseña Actualizada"
+            );
+
+            IsChangingPassword = false;
+            PasswordForm = new PasswordChangeForm();
+        }
+        catch (Exception ex)
+        {
+            AlertComponent?.Show(
+                $"Error al cambiar la contraseña: {ex.Message}",
+                AlertType.Danger,
+                "Error"
+            );
+        }
+        finally
+        {
+            IsSaving = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task SavePreferences()
+    {
+        try
+        {
+            IsSaving = true;
+            StateHasChanged();
+
+            // Aquí implementarías la llamada al servicio para guardar configuraciones
+            await Task.Delay(500);
+
+            AlertComponent?.Show(
+                "Configuraciones guardadas exitosamente",
+                AlertType.Success,
+                "Configuración Actualizada"
+            );
+        }
+        catch (Exception ex)
+        {
+            AlertComponent?.Show(
+                $"Error al guardar configuraciones: {ex.Message}",
+                AlertType.Danger,
+                "Error"
+            );
+        }
+        finally
+        {
+            IsSaving = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task ShowAvatarUpload()
+    {
+        // Implementar subida de avatar
+        AlertComponent?.Show(
+            "Función de cambio de avatar próximamente disponible",
+            AlertType.Info,
+            "Próximamente"
+        );
+        await Task.CompletedTask;
+    }
+
+    // Clases para formularios
+    public class PersonalInfoForm
+    {
+        [Required(ErrorMessage = "El nombre es requerido")]
+        [StringLength(100, ErrorMessage = "El nombre no puede exceder los 100 caracteres")]
+        public string Nombre { get; set; } = "";
+
+        [Required(ErrorMessage = "El apellido es requerido")]
+        [StringLength(100, ErrorMessage = "El apellido no puede exceder los 100 caracteres")]
+        public string Apellido { get; set; } = "";
+
+        [Required(ErrorMessage = "El email es requerido")]
+        [EmailAddress(ErrorMessage = "El formato del email no es válido")]
+        [StringLength(100, ErrorMessage = "El email no puede exceder los 100 caracteres")]
+        public string Email { get; set; } = "";
+    }
+
+    public class PasswordChangeForm
+    {
+        [Required(ErrorMessage = "La contraseña actual es requerida")]
+        public string ContraseñaActual { get; set; } = "";
+
+        [Required(ErrorMessage = "La nueva contraseña es requerida")]
+        [StringLength(50, MinimumLength = 6, ErrorMessage = "La contraseña debe tener entre 6 y 50 caracteres")]
+        public string NuevaContraseña { get; set; } = "";
+
+        [Required(ErrorMessage = "Debe confirmar la nueva contraseña")]
+        public string ConfirmarContraseña { get; set; } = "";
+    }
+
+    public class NotificationSettings
+    {
+        public bool Email { get; set; }
+        public bool Sistema { get; set; }
+    }
+}
