@@ -49,23 +49,23 @@
 
     <Alert @ref="AlertComponent" />
 
-    <EditForm EditContext="@_editContext" OnValidSubmit="HandleValidSubmit">
-        <div class="row">
-            <div class="col-lg-8">
-                <div class="card mb-4">
-                    <div class="card-header">
-                        <h5 class="card-title mb-0">
-                            <i class="bi bi-receipt me-2"></i>Información de la Factura
-                        </h5>
-                    </div>
-                    <div class="card-body">
-                        <div class="row">
-                            <div class="col-md-6">
-                                <div class="mb-3">
-                                    <label class="form-label">Fecha</label>
-                                    <input type="text" class="form-control" value="@DateTime.Now.ToString("dd/MM/yyyy HH:mm")" readonly />
-                                    <div class="form-text">Fecha actual del sistema</div>
-                                </div>
+    <form @onsubmit="HandleFormSubmit" @onsubmit:preventDefault="true">
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-receipt me-2"></i>Información de la Factura
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">Fecha</label>
+                                <input type="text" class="form-control" value="@DateTime.Now.ToString("dd/MM/yyyy HH:mm")" readonly />
+                                <div class="form-text">Fecha actual del sistema</div>
+                            </div>
                             </div>
                             <div class="col-md-6">
                                 <div class="mb-3">
@@ -90,11 +90,62 @@
                             <div class="col-md-12">
                                 <div class="mb-3">
                                     <label class="form-label">Cliente *</label>
-                                    <SelectCliente @bind-Value="NuevaFactura.ClienteId"
-                                      Cliente="ClienteSeleccionado"
-                                      ShowSelectedInfo="true"
-                                      ErrorMessage="@GetFieldError(nameof(NuevaFactura.ClienteId))"
-                                      OnClienteSelected="OnClienteSelectedHandler" />
+                                    <div class="client-selector">
+                                        <div class="mb-2">
+                                            <div class="input-group">
+                                                <input type="text" class="form-control" placeholder="Buscar cliente..." 
+                                                       @bind="BusquedaCliente" @bind:event="oninput" @onkeyup="BuscarCliente" />
+                                                <button class="btn btn-outline-secondary" type="button" @onclick="LimpiarBusqueda">
+                                                    <i class="bi bi-x"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                        
+                                        <select class="form-select @(string.IsNullOrEmpty(ClienteError) ? "" : "is-invalid")" 
+                                                value="@NuevaFactura.ClienteId" 
+                                                @onchange="OnClienteSelectChanged">
+                                            <option value="">Seleccionar cliente...</option>
+                                            @if (ClientesFiltrados != null)
+                                            {
+                                                @foreach (var cliente in ClientesFiltrados)
+                                                {
+                                                    <option value="@cliente.Id">@cliente.DocumentoNombre</option>
+                                                }
+                                            }
+                                        </select>
+                
+                                        @if (!string.IsNullOrEmpty(ClienteError))
+                                        {
+                                            <div class="invalid-feedback d-block">@ClienteError</div>
+                                        }
+                
+                                        <!-- Botón para crear nuevo cliente -->
+                                        <div class="mt-2">
+                                            <button type="button" class="btn btn-outline-primary btn-sm" @onclick="MostrarCrearCliente">
+                                                <i class="bi bi-plus me-1"></i>Crear Nuevo Cliente
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    @if (ClienteSeleccionado != null)
+                                    {
+                                        <div class="selected-cliente-info mt-3 p-3 bg-light rounded">
+                                            <div class="row">
+                                                <div class="col-md-6">
+                                                    <small class="text-muted">Cliente:</small>
+                                                    <div class="fw-bold">@ClienteSeleccionado.NombreCompleto</div>
+                                                </div>
+                                                <div class="col-md-3">
+                                                    <small class="text-muted">Documento:</small>
+                                                    <div>@ClienteSeleccionado.NumeroDocumento</div>
+                                                </div>
+                                                <div class="col-md-3">
+                                                    <small class="text-muted">Teléfono:</small>
+                                                    <div>@ClienteSeleccionado.Telefono</div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    }
                         <ValidationMessage For="@(() => NuevaFactura.ClienteId)" />
                                 </div>
                             </div>
@@ -231,8 +282,8 @@
                     }
                 </div>
             </div>
-        </div>
-    </EditForm>
+        </div>   
+    </form>
 
     <!-- Confirmación -->
     <Confirm @ref="ConfirmDialog" />
@@ -294,10 +345,255 @@
     private int TotalArticulos => NuevaFactura.Detalles?.Count ?? 0;
     private int TotalCantidad => NuevaFactura.Detalles?.Sum(d => d.Cantidad) ?? 0;
 
-   
+    private List<ClienteDto>? ClientesDisponibles;
+    private List<ClienteDto>? ClientesFiltrados;
+    private string ClienteError = "";
+    private string BusquedaCliente = "";
+    private bool MostrandoCrearCliente = false;
+    private SelectCliente? SelectClienteComponent;
+
+    protected override async Task OnInitializedAsync()
+    {
+        NuevaFactura = new CrearFacturaDto
+        {
+            Detalles = new List<CrearFacturaDetalleDto>()
+        };
+
+        // Mantener la lista separada para el componente DetalleEditor
+        DetallesFactura = new List<FacturaDetalleDto>();
+        
+        // Inicializar el contexto de edición personalizado
+        _editContext = new EditContext(NuevaFactura);
+        _messageStore = new ValidationMessageStore(_editContext);
+        
+        // Configurar manejadores de validación personalizados
+        _editContext.OnValidationRequested += HandleValidationRequested;
+        _editContext.OnFieldChanged += HandleFieldChanged;
+
+        // Cargar clientes disponibles
+        await CargarClientes();
+    }
+
+    private async Task CargarClientes()
+    {
+        try
+        {
+            var result = await ClienteService.GetAll();
+            if (result.Success && result.Data != null)
+            {
+                ClientesDisponibles = result.Data.Where(c => c.Activo).ToList();
+                ClientesFiltrados = ClientesDisponibles;
+            }
+            else
+            {
+                ClienteError = "No se pudieron cargar los clientes: " + result.Message;
+                ClientesDisponibles = new List<ClienteDto>();
+                ClientesFiltrados = new List<ClienteDto>();
+            }
+        }
+        catch (Exception ex)
+        {
+            ClienteError = "Error al cargar la lista de clientes: " + ex.Message;
+            ClientesDisponibles = new List<ClienteDto>();
+            ClientesFiltrados = new List<ClienteDto>();
+        }
+    }
+
+    private async Task OnClienteSelectChanged(ChangeEventArgs e)
+    {
+        ClienteError = "";
+        
+        if (int.TryParse(e.Value?.ToString(), out int clienteId))
+        {
+            if (clienteId > 0)
+            {
+                NuevaFactura.ClienteId = clienteId;
+                
+                // Buscar cliente en la lista local primero
+                ClienteSeleccionado = ClientesDisponibles?.FirstOrDefault(c => c.Id == clienteId);
+                
+                // Si no está en la lista local, buscarlo en la API
+                if (ClienteSeleccionado == null)
+                {
+                    try
+                    {
+                        var result = await ClienteService.GetById(clienteId);
+                        if (result.Success && result.Data != null)
+                        {
+                            ClienteSeleccionado = result.Data;
+                            
+                            // Añadirlo a la lista local si no existe
+                            if (ClientesDisponibles?.Any(c => c.Id == clienteId) != true)
+                            {
+                                ClientesDisponibles?.Add(ClienteSeleccionado);
+                            }
+                        }
+                        else
+                        {
+                            ClienteError = "No se pudo cargar el cliente seleccionado: " + result.Message;
+                            NuevaFactura.ClienteId = 0;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        ClienteError = "Error al cargar datos del cliente: " + ex.Message;
+                        NuevaFactura.ClienteId = 0;
+                    }
+                }
+                
+                // Notificar el cambio para validación
+                if (_editContext != null)
+                {
+                    _editContext.NotifyFieldChanged(_editContext.Field(nameof(NuevaFactura.ClienteId)));
+                }
+            }
+            else
+            {
+                NuevaFactura.ClienteId = 0;
+                ClienteSeleccionado = null;
+            }
+        }
+        else
+        {
+            NuevaFactura.ClienteId = 0;
+            ClienteSeleccionado = null;
+        }
+        
+        await CalculateTotals();
+        StateHasChanged();
+    }
+
+    private async Task BuscarCliente()
+    {
+        if (string.IsNullOrWhiteSpace(BusquedaCliente))
+        {
+            ClientesFiltrados = ClientesDisponibles;
+            return;
+        }
+
+        if (BusquedaCliente.Length >= 2) // Buscar con mínimo 2 caracteres
+        {
+            try
+            {
+                var result = await ClienteService.GetPaginated(1, 20, BusquedaCliente);
+                if (result.Success && result.Data?.Lista != null)
+                {
+                    ClientesFiltrados = result.Data.Lista.ToList();
+                    
+                    // Añadir resultados de búsqueda a la lista de clientes disponibles
+                    foreach (var cliente in ClientesFiltrados)
+                    {
+                        if (ClientesDisponibles?.Any(c => c.Id == cliente.Id) != true)
+                        {
+                            ClientesDisponibles?.Add(cliente);
+                        }
+                    }
+                }
+                else
+                {
+                    // Usar filtro local si falla la búsqueda remota
+                    FiltrarClientesLocalmente();
+                }
+            }
+            catch (Exception)
+            {
+                // Usar filtro local si falla la búsqueda
+                FiltrarClientesLocalmente();
+            }
+        }
+        else
+        {
+            FiltrarClientesLocalmente();
+        }
+    }
+
+    private void FiltrarClientesLocalmente()
+    {
+        if (string.IsNullOrWhiteSpace(BusquedaCliente))
+        {
+            ClientesFiltrados = ClientesDisponibles;
+        }
+        else
+        {
+            ClientesFiltrados = ClientesDisponibles?
+                .Where(c => 
+                    c.NombreCompleto?.Contains(BusquedaCliente, StringComparison.OrdinalIgnoreCase) == true ||
+                    c.NumeroDocumento?.Contains(BusquedaCliente, StringComparison.OrdinalIgnoreCase) == true ||
+                    c.DocumentoNombre?.Contains(BusquedaCliente, StringComparison.OrdinalIgnoreCase) == true)
+                .ToList();
+        }
+    }
+
+    private void LimpiarBusqueda()
+    {
+        BusquedaCliente = "";
+        ClientesFiltrados = ClientesDisponibles;
+    }
+
+    private async Task MostrarCrearCliente()
+    {
+        if (ConfirmDialog != null)
+        {
+            var confirmed = await ConfirmDialog.ShowAsync(
+                "Crear Nuevo Cliente",
+                "¿Desea crear un nuevo cliente? Se abrirá una nueva pantalla.",
+                ConfirmType.Info
+            );
+
+            if (confirmed)
+            {
+                // Guardar estado actual en SessionStorage si es necesario
+                // await JSRuntime.InvokeVoidAsync("sessionStorage.setItem", "facturaEnCreacion", JsonSerializer.Serialize(NuevaFactura));
+                
+                // Navegar a la página de creación de clientes
+                Navigation.NavigateTo("/clientes/crear?returnUrl=/facturas/crear");
+            }
+        }
+    }
+
+    // Reemplaza OnClienteSelectedHandler con este método si se usa SelectCliente como componente
+    private async Task OnClienteSelectedHandler(ClienteDto cliente)
+    {
+        if (cliente != null)
+        {
+            NuevaFactura.ClienteId = cliente.Id;
+            ClienteSeleccionado = cliente;
+            
+            // Añadir a la lista local si no existe
+            if (ClientesDisponibles?.Any(c => c.Id == cliente.Id) != true && ClientesDisponibles != null)
+            {
+                ClientesDisponibles.Add(cliente);
+            }
+            
+            // Notificar el cambio para validación
+            if (_editContext != null)
+            {
+                _editContext.NotifyFieldChanged(_editContext.Field(nameof(NuevaFactura.ClienteId)));
+            }
+            
+            await CalculateTotals();
+        }
+        else
+        {
+            NuevaFactura.ClienteId = 0;
+            ClienteSeleccionado = null;
+        }
+        
+        StateHasChanged();
+    }
 
     private async Task HandleValidSubmit(EditContext editContext)
     {
+        await SaveFacturaAsync();
+    }
+
+    private async Task HandleFormSubmit()
+    {
+        if (!ValidateForm())
+        {
+            return; // No proceder si hay errores
+        }
+    
         await SaveFacturaAsync();
     }
 
@@ -705,4 +1001,5 @@
             _editContext.OnFieldChanged -= HandleFieldChanged;
         }
     }
+  
 }
