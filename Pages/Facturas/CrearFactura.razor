@@ -47,16 +47,11 @@
         </div>
     </div>
 
-    <!-- Alertas -->
     <Alert @ref="AlertComponent" />
 
-    <!-- Formulario -->
-    <EditForm EditContext="@_editContext" OnValidSubmit="SaveFacturaAsync">
-        <!-- No usamos DataAnnotationsValidator para evitar CS1662 -->
+    <EditForm EditContext="@_editContext" OnValidSubmit="HandleValidSubmit">
         <div class="row">
-            <!-- Columna Izquierda: Información del Cliente -->
             <div class="col-lg-8">
-                <!-- Información de la Factura -->
                 <div class="card mb-4">
                     <div class="card-header">
                         <h5 class="card-title mb-0">
@@ -96,11 +91,11 @@
                                 <div class="mb-3">
                                     <label class="form-label">Cliente *</label>
                                     <SelectCliente @bind-Value="NuevaFactura.ClienteId"
-                                          @bind-Cliente="ClienteSeleccionado"
-                                          ShowSelectedInfo="true"
-                                          ErrorMessage="@GetFieldError(nameof(NuevaFactura.ClienteId))"
-                                          OnClienteSelected="ClienteSeleccionadoHandler" />
-                                    <ValidationMessage For="@(() => NuevaFactura.ClienteId)" />
+                                      Cliente="ClienteSeleccionado"
+                                      ShowSelectedInfo="true"
+                                      ErrorMessage="@GetFieldError(nameof(NuevaFactura.ClienteId))"
+                                      OnClienteSelected="OnClienteSelectedHandler" />
+                        <ValidationMessage For="@(() => NuevaFactura.ClienteId)" />
                                 </div>
                             </div>
                         </div>
@@ -299,6 +294,13 @@
     private int TotalArticulos => NuevaFactura.Detalles?.Count ?? 0;
     private int TotalCantidad => NuevaFactura.Detalles?.Sum(d => d.Cantidad) ?? 0;
 
+   
+
+    private async Task HandleValidSubmit(EditContext editContext)
+    {
+        await SaveFacturaAsync();
+    }
+
     protected override void OnInitialized()
     {
         NuevaFactura = new CrearFacturaDto
@@ -409,24 +411,39 @@
         _editContext.NotifyValidationStateChanged();
     }
 
-    private async Task ClienteSeleccionadoHandler()
-    {
-        if (ClienteSeleccionado != null)
-        {
-            NuevaFactura.ClienteId = ClienteSeleccionado.Id;
-            // Notificar cambio de campo para validación
-            if (_editContext != null)
-            {
-                _editContext.NotifyFieldChanged(_editContext.Field(nameof(NuevaFactura.ClienteId)));
-            }
-            await CalculateTotals();
-        }
-    }
-
-    private async Task HandleDetallesChanged(List<FacturaDetalleDto> detalles)
+   private async Task HandleDetallesChanged(List<FacturaDetalleDto> detalles)
     {
         await OnDetallesChanged(detalles);
     }
+
+    private async Task OnClienteSelectedHandler()
+{
+    // El componente SelectCliente ya actualiza el Value automáticamente
+    // Solo necesitamos actualizar nuestro objeto local
+    if (NuevaFactura.ClienteId > 0)
+    {
+        // Buscar el cliente en la lista del componente
+        // o usar el servicio para obtenerlo
+        try
+        {
+            var result = await ClienteService.GetById(NuevaFactura.ClienteId);
+            if (result.Success && result.Data != null)
+            {
+                ClienteSeleccionado = result.Data;
+            }
+        }
+        catch (Exception)
+        {
+            // Manejar error silenciosamente
+        }
+
+        if (_editContext != null)
+        {
+            _editContext.NotifyFieldChanged(_editContext.Field(nameof(NuevaFactura.ClienteId)));
+        }
+        await CalculateTotals();
+    }
+}
 
     private async Task OnDetallesChanged(List<FacturaDetalleDto> detalles)
     {
@@ -503,121 +520,66 @@
             AplicaDescuento = aplicaDescuento
         };
     }
-
-    // Método que recibe el EditContext como parámetro para OnValidSubmit
-    private async Task SaveFacturaAsync(EditContext editContext)
-    {
-        if (!editContext.Validate() || IsSaving || !IsFormValid)
-            return;
-
-        try
-        {
-            IsSaving = true;
-            StateHasChanged();
-
-            if (!ValidateForm())
-            {
-                IsSaving = false;
-                StateHasChanged();
-                return;
-            }
-
-            var result = await FacturaService.Create(NuevaFactura);
-
-            if (result.Success && result.Data != null)
-            {
-                AlertComponent?.Show(
-                    $"Factura creada exitosamente. Número de factura: {result.Data.NumeroFactura}",
-                    AlertType.Success,
-                    "¡Éxito!"
-                );
-
-                await Task.Delay(2000); // Mostrar mensaje por 2 segundos
-                Navigation.NavigateTo($"/facturas/{result.Data.Id}");
-            }
-            else
-            {
-                AlertComponent?.Show(
-                    result.Message ?? "Error al crear la factura",
-                    AlertType.Danger,
-                    "Error"
-                );
-            }
-        }
-        catch (Exception ex)
-        {
-            AlertComponent?.Show(
-                $"Error inesperado: {ex.Message}",
-                AlertType.Danger,
-                "Error"
-            );
-        }
-        finally
-        {
-            IsSaving = false;
-            StateHasChanged();
-        }
-    }
     
     // Método para los botones
-    private async Task SaveFacturaAsync()
+   private async Task SaveFacturaAsync()
+{
+    if (_editContext == null || IsSaving || !IsFormValid) return;
+    
+    // Validar el formulario usando el EditContext
+    if (!_editContext.Validate())
     {
-        if (_editContext == null || IsSaving || !IsFormValid) return;
-        
-        // Validar el formulario usando el EditContext
-        if (!_editContext.Validate())
+        return;
+    }
+
+    try
+    {
+        IsSaving = true;
+        StateHasChanged();
+
+        if (!ValidateForm())
         {
+            IsSaving = false;
+            StateHasChanged();
             return;
         }
 
-        try
-        {
-            IsSaving = true;
-            StateHasChanged();
+        var result = await FacturaService.Create(NuevaFactura);
 
-            if (!ValidateForm())
-            {
-                IsSaving = false;
-                StateHasChanged();
-                return;
-            }
-
-            var result = await FacturaService.Create(NuevaFactura);
-
-            if (result.Success && result.Data != null)
-            {
-                AlertComponent?.Show(
-                    $"Factura creada exitosamente. Número de factura: {result.Data.NumeroFactura}",
-                    AlertType.Success,
-                    "¡Éxito!"
-                );
-
-                await Task.Delay(2000); // Mostrar mensaje por 2 segundos
-                Navigation.NavigateTo($"/facturas/{result.Data.Id}");
-            }
-            else
-            {
-                AlertComponent?.Show(
-                    result.Message ?? "Error al crear la factura",
-                    AlertType.Danger,
-                    "Error"
-                );
-            }
-        }
-        catch (Exception ex)
+        if (result.Success && result.Data != null)
         {
             AlertComponent?.Show(
-                $"Error inesperado: {ex.Message}",
+                $"Factura creada exitosamente. Número de factura: {result.Data.NumeroFactura}",
+                AlertType.Success,
+                "¡Éxito!"
+            );
+
+            await Task.Delay(2000);
+            Navigation.NavigateTo($"/facturas/{result.Data.Id}");
+        }
+        else
+        {
+            AlertComponent?.Show(
+                result.Message ?? "Error al crear la factura",
                 AlertType.Danger,
                 "Error"
             );
         }
-        finally
-        {
-            IsSaving = false;
-            StateHasChanged();
-        }
     }
+    catch (Exception ex)
+    {
+        AlertComponent?.Show(
+            $"Error inesperado: {ex.Message}",
+            AlertType.Danger,
+            "Error"
+        );
+    }
+    finally
+    {
+        IsSaving = false;
+        StateHasChanged();
+    }
+}
 
     private bool ValidateForm()
     {
