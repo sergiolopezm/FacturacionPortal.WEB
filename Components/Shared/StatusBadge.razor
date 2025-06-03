@@ -1,0 +1,67 @@
+﻿@using FacturacionPortal.WEB.Util
+
+<span class="badge @GetBadgeClass()" title="@Tooltip">
+    @if (!string.IsNullOrEmpty(Icon))
+    {
+        <i class="@Icon me-1"></i>
+    }
+    @GetDisplayText()
+</span>
+
+@code {
+    [Parameter] public string Status { get; set; } = string.Empty;
+    [Parameter] public string? CustomText { get; set; }
+    [Parameter] public string? Icon { get; set; }
+    [Parameter] public string? Tooltip { get; set; }
+    [Parameter] public string? CustomClass { get; set; }
+
+    private string GetBadgeClass()
+    {
+        if (!string.IsNullOrEmpty(CustomClass))
+            return CustomClass;
+
+        return Status.ToLower() switch
+        {
+            "activa" or "activo" or "active" => "bg-success",
+            "anulada" or "anulado" or "cancelled" => "bg-danger",
+            "pagada" or "pagado" or "paid" => "bg-primary",
+            "pendiente" or "pending" => "bg-warning text-dark",
+            "procesando" or "processing" => "bg-info",
+            "completado" or "completed" => "bg-success",
+            "error" or "failed" => "bg-danger",
+            "pausado" or "paused" => "bg-secondary",
+            "borrador" or "draft" => "bg-light text-dark",
+            "vencido" or "expired" => "bg-dark",
+            _ => "bg-secondary"
+        };
+    }
+
+    private string GetDisplayText()
+    {
+        if (!string.IsNullOrEmpty(CustomText))
+            return CustomText;
+
+        return Status.ToLower() switch
+        {
+            "activa" or "activo" => "Activo",
+            "anulada" or "anulado" => "Anulado",
+            "pagada" or "pagado" => "Pagado",
+            "pendiente" => "Pendiente",
+            "procesando" => "Procesando",
+            "completado" => "Completado",
+            "error" => "Error",
+            "pausado" => "Pausado",
+            "borrador" => "Borrador",
+            "vencido" => "Vencido",
+            _ => Status
+        };
+    }
+
+    protected override void OnParametersSet()
+    {
+        if (string.IsNullOrEmpty(Tooltip))
+        {
+            Tooltip = $"Estado: {GetDisplayText()}";
+        }
+    }
+}

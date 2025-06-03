@@ -1,0 +1,44 @@
+﻿@using FacturacionPortal.WEB.Helpers
+
+<span class="@CssClass" title="@(ShowTooltip? FormattedValue : null)">
+    @if (ShowSymbol)
+    {
+        <span class="currency-symbol">$</span>
+    }
+    @DisplayValue
+</span>
+
+@code {
+    [Parameter] public decimal Value { get; set; }
+    [Parameter] public bool ShowDecimals { get; set; } = false;
+    [Parameter] public bool ShowSymbol { get; set; } = true;
+    [Parameter] public bool ShowTooltip { get; set; } = false;
+    [Parameter] public string CssClass { get; set; } = "text-end";
+    [Parameter] public string NegativeClass { get; set; } = "text-danger";
+    [Parameter] public string PositiveClass { get; set; } = "text-success";
+    [Parameter] public string ZeroClass { get; set; } = "text-muted";
+
+    private string DisplayValue => ShowDecimals
+        ? CurrencyHelper.FormatNumberWithDecimals(Value)
+        : CurrencyHelper.FormatNumber(Value);
+
+    private string FormattedValue => ShowDecimals
+        ? CurrencyHelper.FormatCurrencyWithDecimals(Value)
+        : CurrencyHelper.FormatCurrency(Value);
+
+    protected override void OnParametersSet()
+    {
+        if (!string.IsNullOrEmpty(NegativeClass) && Value < 0)
+        {
+            CssClass = $"{CssClass} {NegativeClass}".Trim();
+        }
+        else if (!string.IsNullOrEmpty(PositiveClass) && Value > 0)
+        {
+            CssClass = $"{CssClass} {PositiveClass}".Trim();
+        }
+        else if (!string.IsNullOrEmpty(ZeroClass) && Value == 0)
+        {
+            CssClass = $"{CssClass} {ZeroClass}".Trim();
+        }
+    }
+}
