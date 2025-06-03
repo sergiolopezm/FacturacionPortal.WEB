@@ -3,6 +3,7 @@
 @using FacturacionPortal.WEB.Shared.Components
 @using FacturacionPortal.WEB.Shared.Features.FacturaDetalle
 @using FacturacionPortal.WEB.Components.Shared
+@using FacturacionPortal.WEB.Util
 @inject IArticuloService ArticuloService
 
 <div class="detalle-editor @ContainerClass">
@@ -13,7 +14,7 @@
             <div class="d-flex gap-2">
                 @if (ShowAddButton)
                 {
-                    <button class="btn btn-primary btn-sm" @onclick="ShowAddForm" disabled="@IsLoading">
+                    <button class="btn btn-primary btn-sm" @onclick="MostrarFormularioAgregar" disabled="@IsLoading">
                         <i class="bi bi-plus me-1"></i>Agregar Artículo
                     </button>
                 }
@@ -29,7 +30,7 @@
         </div>
     }
 
-    @if (ShowAddForm)
+    @if (IsAddFormVisible)
     {
         <div class="add-form card mb-3">
             <div class="card-body">
@@ -37,8 +38,8 @@
                     <div class="col-md-4">
                         <label class="form-label">Artículo *</label>
                         <select class="form-select @(HasAddFormError("ArticuloId") ? "is-invalid" : "")"
-                                @bind="NewDetalle.ArticuloId"
-                                @onchange="OnNewArticuloChanged">
+                                value="@NewDetalle.ArticuloId"
+                                @onchange="OnNewArticuloChangedEvent">
                             <option value="">Seleccionar artículo...</option>
                             @if (ArticulosDisponibles != null)
                             {
@@ -53,12 +54,12 @@
                             <div class="invalid-feedback">@GetAddFormError("ArticuloId")</div>
                         }
                     </div>
-                    
+
                     <div class="col-md-2">
                         <label class="form-label">Cantidad *</label>
                         <input type="number" class="form-control @(HasAddFormError("Cantidad") ? "is-invalid" : "")"
-                               @bind="NewDetalle.Cantidad"
-                               @oninput="OnNewCantidadChanged"
+                               value="@NewDetalle.Cantidad"
+                               @oninput="OnNewCantidadChangedEvent"
                                min="1"
                                max="@GetMaxCantidad()" />
                         @if (HasAddFormError("Cantidad"))
@@ -66,12 +67,12 @@
                             <div class="invalid-feedback">@GetAddFormError("Cantidad")</div>
                         }
                     </div>
-                    
+
                     <div class="col-md-2">
                         <label class="form-label">Precio Unit. *</label>
                         <input type="number" class="form-control @(HasAddFormError("PrecioUnitario") ? "is-invalid" : "")"
-                               @bind="NewDetalle.PrecioUnitario"
-                               @oninput="OnNewPrecioChanged"
+                               value="@NewDetalle.PrecioUnitario"
+                               @oninput="OnNewPrecioChangedEvent"
                                min="0.01"
                                step="0.01" />
                         @if (HasAddFormError("PrecioUnitario"))
@@ -79,14 +80,14 @@
                             <div class="invalid-feedback">@GetAddFormError("PrecioUnitario")</div>
                         }
                     </div>
-                    
+
                     <div class="col-md-2">
                         <label class="form-label">Subtotal</label>
                         <div class="form-control-plaintext">
                             <CurrencyDisplay Value="@NewDetalle.Subtotal" ShowSymbol="true" />
                         </div>
                     </div>
-                    
+
                     <div class="col-md-2">
                         <label class="form-label">&nbsp;</label>
                         <div class="d-flex gap-1">
@@ -141,9 +142,9 @@
         <div class="text-center py-4">
             <i class="bi bi-cart display-4 text-muted"></i>
             <div class="mt-2 text-muted">@EmptyMessage</div>
-            @if (!ShowAddForm && ShowAddButton)
+            @if (!IsAddFormVisible && ShowAddButton)
             {
-                <button class="btn btn-primary mt-2" @onclick="ShowAddForm">
+                <button class="btn btn-primary mt-2" @onclick="MostrarFormularioAgregar">
                     <i class="bi bi-plus me-1"></i>Agregar Primer Artículo
                 </button>
             }
@@ -159,8 +160,8 @@
                         {
                             <th class="text-center" style="width: 50px;">
                                 <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" 
-                                           @bind="SelectAll" 
+                                    <input class="form-check-input" type="checkbox"
+                                           checked="@SelectAll"
                                            @onchange="OnSelectAllChanged" />
                                 </div>
                             </th>
@@ -184,22 +185,22 @@
                     @foreach (var (detalle, index) in Detalles.Select((d, i) => (d, i + 1)))
                     {
                         <DetalleItem Detalle="@detalle"
-                                   Articulos="@ArticulosDisponibles"
-                                   Index="@index"
-                                   IsSelected="@IsSelected(detalle)"
-                                   IsEditable="@IsEditable"
-                                   ShowSelector="@ShowBulkActions"
-                                   ShowIndex="true"
-                                   ShowActions="@ShowActions"
-                                   ShowStockInfo="@ShowStockInfo"
-                                   ShowDuplicateButton="@ShowDuplicateButton"
-                                   ShowDeleteButton="@ShowDeleteButton"
-                                   IsSelectedChanged="@(selected => OnItemSelectionChanged(detalle, selected))"
-                                   OnEdit="@OnItemEdit"
-                                   OnSave="@OnItemSave"
-                                   OnDelete="@OnItemDelete"
-                                   OnDuplicate="@OnItemDuplicate"
-                                   OnChanged="@OnItemChanged" />
+                                     Articulos="@ArticulosDisponibles"
+                                     Index="@index"
+                                     IsSelected="@IsSelected(detalle)"
+                                     IsEditable="@IsEditable"
+                                     ShowSelector="@ShowBulkActions"
+                                     ShowIndex="true"
+                                     ShowActions="@ShowActions"
+                                     ShowStockInfo="@ShowStockInfo"
+                                     ShowDuplicateButton="@ShowDuplicateButton"
+                                     ShowDeleteButton="@ShowDeleteButton"
+                                     IsSelectedChanged="@(selected => OnItemSelectionChanged(detalle, selected))"
+                                     OnEdit="@OnItemEdit"
+                                     OnSave="@OnItemSave"
+                                     OnDelete="@OnItemDelete"
+                                     OnDuplicate="@OnItemDuplicate"
+                                     OnChanged="@OnItemChanged" />
                     }
                 </tbody>
                 @if (ShowTotals)
@@ -231,7 +232,7 @@
 @code {
     [Parameter] public List<FacturaDetalleDto>? Detalles { get; set; }
     [Parameter] public EventCallback<List<FacturaDetalleDto>> DetallesChanged { get; set; }
-    
+
     [Parameter] public bool IsEditable { get; set; } = true;
     [Parameter] public bool ShowHeader { get; set; } = true;
     [Parameter] public bool ShowAddButton { get; set; } = true;
@@ -241,11 +242,11 @@
     [Parameter] public bool ShowDuplicateButton { get; set; } = true;
     [Parameter] public bool ShowDeleteButton { get; set; } = true;
     [Parameter] public bool ShowTotals { get; set; } = true;
-    
+
     [Parameter] public string HeaderTitle { get; set; } = "Artículos de la Factura";
     [Parameter] public string EmptyMessage { get; set; } = "No hay artículos agregados";
     [Parameter] public string ContainerClass { get; set; } = "";
-    
+
     [Parameter] public EventCallback<FacturaDetalleDto> OnDetalleAdded { get; set; }
     [Parameter] public EventCallback<FacturaDetalleDto> OnDetalleUpdated { get; set; }
     [Parameter] public EventCallback<FacturaDetalleDto> OnDetalleDeleted { get; set; }
@@ -257,9 +258,9 @@
     private List<FacturaDetalleDto> SelectedItems = new();
     private Dictionary<string, string> AddFormErrors = new();
     private Confirm? ConfirmDialog;
-    
+
     private bool IsLoading = false;
-    private bool ShowAddForm = false;
+    private bool IsAddFormVisible = false; // Cambiado desde ShowAddForm para evitar ambigüedad
     private bool SelectAll = false;
 
     private bool HasSelectedItems => SelectedItems.Any();
@@ -295,6 +296,11 @@
         }
     }
 
+    private async Task OnNewArticuloChangedEvent(ChangeEventArgs e)
+    {
+        await OnNewArticuloChanged(e);
+    }
+
     private async Task OnNewArticuloChanged(ChangeEventArgs e)
     {
         if (int.TryParse(e.Value?.ToString(), out int articuloId))
@@ -307,7 +313,7 @@
                 NewDetalle.ArticuloNombre = SelectedArticuloInfo.Nombre;
                 NewDetalle.PrecioUnitario = SelectedArticuloInfo.PrecioUnitario;
                 NewDetalle.StockDisponible = SelectedArticuloInfo.Stock;
-                
+
                 await CalculateNewSubtotal();
                 ClearAddFormError("ArticuloId");
             }
@@ -319,10 +325,28 @@
         }
     }
 
+    private async Task OnNewCantidadChangedEvent(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out int cantidad))
+        {
+            NewDetalle.Cantidad = cantidad;
+            await OnNewCantidadChanged();
+        }
+    }
+
     private async Task OnNewCantidadChanged()
     {
         await CalculateNewSubtotal();
         ValidateNewCantidad();
+    }
+
+    private async Task OnNewPrecioChangedEvent(ChangeEventArgs e)
+    {
+        if (decimal.TryParse(e.Value?.ToString(), out decimal precio))
+        {
+            NewDetalle.PrecioUnitario = precio;
+            await OnNewPrecioChanged();
+        }
     }
 
     private async Task OnNewPrecioChanged()
@@ -384,7 +408,7 @@
         Detalles.Add(nuevoDetalle);
 
         await NotifyDetallesChanged();
-        
+
         if (OnDetalleAdded.HasDelegate)
         {
             await OnDetalleAdded.InvokeAsync(nuevoDetalle);
@@ -427,7 +451,7 @@
 
     private async Task CancelAdd()
     {
-        ShowAddForm = false;
+        IsAddFormVisible = false; // Cambiado desde ShowAddForm
         NewDetalle = new CrearFacturaDetalleDto();
         SelectedArticuloInfo = null;
         AddFormErrors.Clear();
@@ -453,7 +477,7 @@
     private async Task OnSelectAllChanged(ChangeEventArgs e)
     {
         var selectAll = (bool)(e.Value ?? false);
-        
+
         if (selectAll)
         {
             SelectedItems = Detalles?.ToList() ?? new List<FacturaDetalleDto>();
@@ -475,7 +499,7 @@
     private async Task OnItemSave(FacturaDetalleDto detalle)
     {
         await NotifyDetallesChanged();
-        
+
         if (OnDetalleUpdated.HasDelegate)
         {
             await OnDetalleUpdated.InvokeAsync(detalle);
@@ -497,7 +521,7 @@
                 Detalles?.Remove(detalle);
                 SelectedItems.Remove(detalle);
                 await NotifyDetallesChanged();
-                
+
                 if (OnDetalleDeleted.HasDelegate)
                 {
                     await OnDetalleDeleted.InvokeAsync(detalle);
@@ -522,7 +546,7 @@
 
         Detalles?.Add(duplicado);
         await NotifyDetallesChanged();
-        
+
         if (OnDetalleAdded.HasDelegate)
         {
             await OnDetalleAdded.InvokeAsync(duplicado);
@@ -550,7 +574,7 @@
             {
                 Detalles?.Remove(item);
             }
-            
+
             SelectedItems.Clear();
             SelectAll = false;
             await NotifyDetallesChanged();
@@ -563,11 +587,17 @@
         {
             await DetallesChanged.InvokeAsync(Detalles);
         }
-        
+
         if (OnDetallesChanged.HasDelegate)
         {
             await OnDetallesChanged.InvokeAsync(Detalles ?? new List<FacturaDetalleDto>());
         }
+    }
+
+    // Renombrado para evitar ambigüedad con la propiedad booleana
+    private void MostrarFormularioAgregar()
+    {
+        IsAddFormVisible = true; // Cambiado desde ShowAddForm
     }
 
     // Helper methods
@@ -575,9 +605,9 @@
     private int GetMaxCantidad() => SelectedArticuloInfo?.Stock ?? 999999;
     private decimal GetTotal() => Detalles?.Sum(d => d.Subtotal) ?? 0;
     private int GetTotalColspan() => 4 + (ShowBulkActions ? 1 : 0);
-    
+
     private string GetStockClass(int stock) => stock <= 0 ? "text-danger" : stock <= 5 ? "text-warning" : "text-success";
-    
+
     private void SetAddFormError(string field, string message) => AddFormErrors[field] = message;
     private void ClearAddFormError(string field) => AddFormErrors.Remove(field);
     private bool HasAddFormError(string field) => AddFormErrors.ContainsKey(field);

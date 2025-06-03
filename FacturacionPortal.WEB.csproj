@@ -17,7 +17,11 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="Configuration\" />
+    <Folder Include="Pages\Auth\" />
+    <Folder Include="Pages\Clientes\" />
+    <Folder Include="Pages\Articulos\" />
+    <Folder Include="Pages\Categorias\" />
+    <Folder Include="Pages\Reportes\" />
   </ItemGroup>
 
 </Project>

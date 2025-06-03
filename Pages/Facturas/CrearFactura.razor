@@ -1,0 +1,746 @@
+﻿@page "/facturas/crear"
+@using FacturacionPortal.WEB.Models.Facturacion
+@using FacturacionPortal.WEB.Services.Interface
+@using FacturacionPortal.WEB.Shared.Components
+@using FacturacionPortal.WEB.Shared.Forms
+@using FacturacionPortal.WEB.Shared.Features.FacturaDetalle
+@using FacturacionPortal.WEB.Shared.Features.CalculadoraFactura
+@using FacturacionPortal.WEB.Components.Shared
+@using FacturacionPortal.WEB.Helpers
+@using FacturacionPortal.WEB.Util
+@using Microsoft.AspNetCore.Components.Forms
+@inject IFacturaService FacturaService
+@inject IClienteService ClienteService
+@inject IArticuloService ArticuloService
+@inject NavigationManager Navigation
+@inject IJSRuntime JSRuntime
+
+<PageTitle>Crear Factura - FacturacionPortal</PageTitle>
+
+<div class="crear-factura-container">
+    <!-- Header -->
+    <div class="page-header mb-4">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h2 class="mb-1">
+                    <i class="bi bi-plus-circle-fill text-primary me-2"></i>
+                    Crear Nueva Factura
+                </h2>
+                <p class="text-muted mb-0">Complete la información para generar una nueva factura</p>
+            </div>
+            <div class="d-flex gap-2">
+                <button class="btn btn-outline-secondary" @onclick="CancelCreate">
+                    <i class="bi bi-x me-1"></i>Cancelar
+                </button>
+                <button class="btn btn-success" @onclick="SaveFacturaAsync" disabled="@(IsSaving || !IsFormValid)">
+                    @if (IsSaving)
+                    {
+                        <span class="spinner-border spinner-border-sm me-1"></span>
+                    }
+                    else
+                    {
+                        <i class="bi bi-check-circle me-1"></i>
+                    }
+                    Guardar Factura
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Alertas -->
+    <Alert @ref="AlertComponent" />
+
+    <!-- Formulario -->
+    <EditForm EditContext="@_editContext" OnValidSubmit="@(async () => await SaveFacturaAsync(_editContext))">
+        <!-- No usamos DataAnnotationsValidator para evitar CS1662 -->
+        <div class="row">
+            <!-- Columna Izquierda: Información del Cliente -->
+            <div class="col-lg-8">
+                <!-- Información de la Factura -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">
+                            <i class="bi bi-receipt me-2"></i>Información de la Factura
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label">Fecha</label>
+                                    <input type="text" class="form-control" value="@DateTime.Now.ToString("dd/MM/yyyy HH:mm")" readonly />
+                                    <div class="form-text">Fecha actual del sistema</div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label">Número de Factura</label>
+                                    <input type="text" class="form-control" value="Se generará automáticamente" readonly />
+                                    <div class="form-text">Se asigna al guardar la factura</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Información del Cliente -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">
+                            <i class="bi bi-person me-2"></i>Información del Cliente
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-12">
+                                <div class="mb-3">
+                                    <label class="form-label">Cliente *</label>
+                                    <SelectCliente @bind-Value="NuevaFactura.ClienteId"
+                                          @bind-Cliente="ClienteSeleccionado"
+                                          ShowSelectedInfo="true"
+                                          ErrorMessage="@GetFieldError(nameof(NuevaFactura.ClienteId))"
+                                          OnClienteSelected="ClienteSeleccionadoHandler" />
+                                    <ValidationMessage For="@(() => NuevaFactura.ClienteId)" />
+                                </div>
+                            </div>
+                        </div>
+
+                        @if (ClienteSeleccionado != null)
+                        {
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label class="form-label">Nombres *</label>
+                                        <InputText class="form-control" @bind-Value="ClienteSeleccionado.Nombres" readonly />
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label class="form-label">Apellidos *</label>
+                                        <InputText class="form-control" @bind-Value="ClienteSeleccionado.Apellidos" readonly />
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-md-8">
+                                    <div class="mb-3">
+                                        <label class="form-label">Dirección *</label>
+                                        <InputText class="form-control" @bind-Value="ClienteSeleccionado.Direccion" readonly />
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="mb-3">
+                                        <label class="form-label">Teléfono *</label>
+                                        <InputText class="form-control" @bind-Value="ClienteSeleccionado.Telefono" readonly />
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <!-- Artículos de la Factura -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">
+                            <i class="bi bi-box-seam me-2"></i>Artículos de la Factura
+                        </h5>
+                    </div>
+                    <div class="card-body p-0">
+                        <DetalleEditor Detalles="@DetallesFactura"
+                          OnDetallesChanged="@OnDetallesChanged"
+                          ShowHeader="false"
+                          EmptyMessage="No hay artículos agregados. Agregue al menos un artículo para continuar." />
+                    </div>
+                </div>
+
+                <!-- Observaciones -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">
+                            <i class="bi bi-chat-text me-2"></i>Observaciones
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label class="form-label">Observaciones</label>
+                            <InputTextArea class="form-control" @bind-Value="NuevaFactura.Observaciones" 
+                                          rows="3" placeholder="Ingrese observaciones adicionales (opcional)" />
+                            <ValidationMessage For="@(() => NuevaFactura.Observaciones)" />
+                            <div class="form-text">Máximo 500 caracteres</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Columna Derecha: Resumen y Totales -->
+            <div class="col-lg-4">
+                <!-- Resumen de la Factura -->
+                <div class="card sticky-top" style="top: 20px;">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">
+                            <i class="bi bi-calculator me-2"></i>Resumen de la Factura
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        @if (NuevaFactura.Detalles?.Any() == true)
+                        {
+                            <!-- Resumen de artículos -->
+                            <div class="mb-3">
+                                <div class="d-flex justify-content-between">
+                                    <span>Total de artículos:</span>
+                                    <span class="fw-bold">@TotalArticulos</span>
+                                </div>
+                                <div class="d-flex justify-content-between">
+                                    <span>Cantidad total:</span>
+                                    <span class="fw-bold">@TotalCantidad</span>
+                                </div>
+                            </div>
+
+                            <hr />
+
+                            <!-- Calculadora de totales -->
+                            <CalculadoraTotales Totales="@TotalesCalculados"
+                                                ItemCount="@TotalArticulos"
+                                                TotalQuantity="@TotalCantidad"
+                                                ShowHeader="false"
+                                                ShowBreakdown="true"
+                                                ShowActions="false"
+                                                ShowPaymentInfo="false" />
+                        }
+                        else
+                        {
+                            <div class="text-center py-4">
+                                <i class="bi bi-cart display-4 text-muted"></i>
+                                <div class="mt-2 text-muted">Agregue artículos para ver el resumen</div>
+                            </div>
+                        }
+                    </div>
+
+                    @if (IsFormValid && NuevaFactura.Detalles?.Any() == true)
+                    {
+                        <div class="card-footer">
+                            <button class="btn btn-primary w-100" @onclick="SaveFacturaAsync" disabled="@IsSaving">
+                               @if (IsSaving)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-2"></span>
+                                    <span>Guardando...</span>
+                                }
+                                else
+                                {
+                                    <i class="bi bi-check-circle me-2"></i>
+                                    <span>Guardar Factura</span>
+                                }
+                            </button>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </EditForm>
+
+    <!-- Confirmación -->
+    <Confirm @ref="ConfirmDialog" />
+</div>
+
+<style>
+    .crear-factura-container {
+        padding: 1rem;
+    }
+
+    .page-header {
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        padding: 1.5rem;
+        border-radius: 0.5rem;
+        border-left: 4px solid var(--bs-primary);
+    }
+
+    .card {
+        border: none;
+        box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    }
+
+    .card-header {
+        background-color: var(--bs-light);
+        border-bottom: 1px solid var(--bs-border-color);
+    }
+
+    .sticky-top {
+        position: sticky;
+        z-index: 1020;
+    }
+
+    @@media (max-width: 991.98px) {
+        .sticky-top {
+            position: relative;
+            top: auto !important;
+        }
+    }
+</style>
+
+@code {
+    private CrearFacturaDto NuevaFactura = new();
+    private ClienteDto? ClienteSeleccionado;
+    private FacturaTotalesDto TotalesCalculados = new();
+    private List<FacturaDetalleDto> DetallesFactura = new();
+    
+    // Nuevo EditContext personalizado para evitar CS1662
+    private EditContext? _editContext;
+    private ValidationMessageStore? _messageStore;
+
+    private Alert? AlertComponent;
+    private Confirm? ConfirmDialog;
+
+    private bool IsSaving = false;
+    private bool IsFormValid => ClienteSeleccionado != null && 
+                                NuevaFactura.ClienteId > 0 && 
+                                NuevaFactura.Detalles?.Any() == true;
+
+    private int TotalArticulos => NuevaFactura.Detalles?.Count ?? 0;
+    private int TotalCantidad => NuevaFactura.Detalles?.Sum(d => d.Cantidad) ?? 0;
+
+    protected override void OnInitialized()
+    {
+        NuevaFactura = new CrearFacturaDto
+        {
+            Detalles = new List<CrearFacturaDetalleDto>()
+        };
+
+        // Mantener la lista separada para el componente DetalleEditor
+        DetallesFactura = new List<FacturaDetalleDto>();
+        
+        // Inicializar el contexto de edición personalizado
+        _editContext = new EditContext(NuevaFactura);
+        _messageStore = new ValidationMessageStore(_editContext);
+        
+        // Configurar manejadores de validación personalizados
+        _editContext.OnValidationRequested += HandleValidationRequested;
+        _editContext.OnFieldChanged += HandleFieldChanged;
+    }
+
+    protected void HandleValidationRequested(object? sender, ValidationRequestedEventArgs args)
+    {
+        if (_messageStore == null || _editContext == null) return;
+        
+        _messageStore.Clear();
+        ValidateModel();
+    }
+
+    protected void HandleFieldChanged(object? sender, FieldChangedEventArgs args)
+    {
+        if (_messageStore == null || _editContext == null) return;
+        
+        _messageStore.Clear(args.FieldIdentifier);
+        ValidateField(args.FieldIdentifier);
+    }
+
+    private void ValidateModel()
+    {
+        if (_messageStore == null || _editContext == null) return;
+        
+        // Validaciones específicas de la factura
+        if (NuevaFactura.ClienteId <= 0)
+        {
+            _messageStore.Add(_editContext.Field(nameof(NuevaFactura.ClienteId)), 
+                Constants.Mensajes.DatosRequeridos + ": Cliente");
+        }
+        
+        if (NuevaFactura.Detalles?.Any() != true)
+        {
+            _messageStore.Add(_editContext.Field(nameof(NuevaFactura.Detalles)), 
+                "Debe agregar al menos un artículo");
+        }
+        
+        // También validamos con DataAnnotations
+        var validationContext = new System.ComponentModel.DataAnnotations.ValidationContext(NuevaFactura);
+        var validationResults = new List<System.ComponentModel.DataAnnotations.ValidationResult>();
+        System.ComponentModel.DataAnnotations.Validator.TryValidateObject(
+            NuevaFactura, validationContext, validationResults, true);
+        
+        foreach (var validationResult in validationResults)
+        {
+            if (validationResult.MemberNames != null)
+            {
+                foreach (var memberName in validationResult.MemberNames)
+                {
+                    _messageStore.Add(_editContext.Field(memberName), validationResult.ErrorMessage ?? "Error de validación");
+                }
+            }
+        }
+        
+        _editContext.NotifyValidationStateChanged();
+    }
+
+    private void ValidateField(in FieldIdentifier fieldIdentifier)
+    {
+        if (_messageStore == null || _editContext == null) return;
+        
+        // Validaciones específicas para campos individuales
+        if (fieldIdentifier.FieldName == nameof(NuevaFactura.ClienteId) && NuevaFactura.ClienteId <= 0)
+        {
+            _messageStore.Add(fieldIdentifier, Constants.Mensajes.DatosRequeridos + ": Cliente");
+        }
+        
+        if (fieldIdentifier.FieldName == nameof(NuevaFactura.Detalles) && NuevaFactura.Detalles?.Any() != true)
+        {
+            _messageStore.Add(fieldIdentifier, "Debe agregar al menos un artículo");
+        }
+        
+        // Validación de DataAnnotations para el campo específico
+        var propertyInfo = fieldIdentifier.Model.GetType().GetProperty(fieldIdentifier.FieldName);
+        if (propertyInfo != null)
+        {
+            var propertyValue = propertyInfo.GetValue(fieldIdentifier.Model);
+            var validationContext = new System.ComponentModel.DataAnnotations.ValidationContext(fieldIdentifier.Model)
+            {
+                MemberName = fieldIdentifier.FieldName
+            };
+            
+            var validationResults = new List<System.ComponentModel.DataAnnotations.ValidationResult>();
+            System.ComponentModel.DataAnnotations.Validator.TryValidateProperty(
+                propertyValue, validationContext, validationResults);
+            
+            foreach (var validationResult in validationResults)
+            {
+                _messageStore.Add(fieldIdentifier, validationResult.ErrorMessage ?? "Error de validación");
+            }
+        }
+        
+        _editContext.NotifyValidationStateChanged();
+    }
+
+    private async Task ClienteSeleccionadoHandler()
+    {
+        if (ClienteSeleccionado != null)
+        {
+            NuevaFactura.ClienteId = ClienteSeleccionado.Id;
+            // Notificar cambio de campo para validación
+            if (_editContext != null)
+            {
+                _editContext.NotifyFieldChanged(_editContext.Field(nameof(NuevaFactura.ClienteId)));
+            }
+            await CalculateTotals();
+        }
+    }
+
+    private async Task HandleDetallesChanged(List<FacturaDetalleDto> detalles)
+    {
+        await OnDetallesChanged(detalles);
+    }
+
+    private async Task OnDetallesChanged(List<FacturaDetalleDto> detalles)
+    {
+        // Sincronizar con el objeto DetallesFactura
+        DetallesFactura = detalles;
+
+        // Convertir de FacturaDetalleDto a CrearFacturaDetalleDto
+        NuevaFactura.Detalles = detalles.Select(d => new CrearFacturaDetalleDto
+        {
+            ArticuloId = d.ArticuloId,
+            Cantidad = d.Cantidad,
+            PrecioUnitario = d.PrecioUnitario,
+            ArticuloCodigo = d.ArticuloCodigo,
+            ArticuloNombre = d.ArticuloNombre,
+            StockDisponible = d.StockActual
+        }).ToList();
+
+        // Notificar cambio de campo para validación
+        if (_editContext != null)
+        {
+            _editContext.NotifyFieldChanged(_editContext.Field(nameof(NuevaFactura.Detalles)));
+        }
+
+        await CalculateTotals();
+        StateHasChanged();
+    }
+
+    private async Task CalculateTotals()
+    {
+        if (NuevaFactura.Detalles?.Any() != true)
+        {
+            TotalesCalculados = new FacturaTotalesDto();
+            return;
+        }
+
+        try
+        {
+            var result = await FacturaService.CalcularTotales(NuevaFactura.Detalles);
+            if (result.Success && result.Data?.Totales != null)
+            {
+                TotalesCalculados = result.Data.Totales;
+            }
+            else
+            {
+                // Cálculo local si la API falla
+                CalculateLocally();
+            }
+        }
+        catch (Exception)
+        {
+            // Cálculo local en caso de error
+            CalculateLocally();
+        }
+    }
+
+    private void CalculateLocally()
+    {
+        var subtotal = NuevaFactura.Detalles?.Sum(d => d.Subtotal) ?? 0;
+        var aplicaDescuento = subtotal >= Constants.Facturacion.MontoMinimoDescuento;
+        var valorDescuento = aplicaDescuento ? CurrencyHelper.CalculatePercentage(subtotal, Constants.Facturacion.PorcentajeDescuento) : 0;
+        var baseImpuestos = subtotal - valorDescuento;
+        var valorIVA = CurrencyHelper.CalculatePercentage(baseImpuestos, Constants.Facturacion.PorcentajeIVA);
+        var total = baseImpuestos + valorIVA;
+
+        TotalesCalculados = new FacturaTotalesDto
+        {
+            SubTotal = subtotal,
+            PorcentajeDescuento = Constants.Facturacion.PorcentajeDescuento,
+            ValorDescuento = valorDescuento,
+            BaseImpuestos = baseImpuestos,
+            PorcentajeIVA = Constants.Facturacion.PorcentajeIVA,
+            ValorIVA = valorIVA,
+            Total = total,
+            AplicaDescuento = aplicaDescuento
+        };
+    }
+
+    // Método que recibe el EditContext como parámetro para OnValidSubmit
+   private async Task SaveFacturaAsync(EditContext editContext)
+{
+    if (!editContext.Validate() || IsSaving || !IsFormValid)
+        return;
+
+    try
+    {
+        IsSaving = true;
+        StateHasChanged();
+
+        if (!ValidateForm())
+        {
+            IsSaving = false;
+            StateHasChanged();
+            return;
+        }
+
+        var result = await FacturaService.Create(NuevaFactura);
+
+        if (result.Success && result.Data != null)
+        {
+            AlertComponent?.Show(
+                $"Factura creada exitosamente. Número de factura: {result.Data.NumeroFactura}",
+                AlertType.Success,
+                "¡Éxito!"
+            );
+
+            await Task.Delay(2000);
+            Navigation.NavigateTo($"/facturas/{result.Data.Id}");
+        }
+        else
+        {
+            AlertComponent?.Show(
+                result.Message ?? "Error al crear la factura",
+                AlertType.Danger,
+                "Error"
+            );
+        }
+    }
+    catch (Exception ex)
+    {
+        AlertComponent?.Show(
+            $"Error inesperado: {ex.Message}",
+            AlertType.Danger,
+            "Error"
+        );
+    }
+    finally
+    {
+        IsSaving = false;
+        StateHasChanged();
+    }
+}
+    
+    // Método para los botones
+    // private async Task SaveFacturaAsync()
+    // {
+    //     if (_editContext == null || IsSaving || !IsFormValid) return;
+        
+    //     // Validar el formulario usando el EditContext
+    //     if (!_editContext.Validate())
+    //     {
+    //         return;
+    //     }
+
+    //     try
+    //     {
+    //         IsSaving = true;
+    //         StateHasChanged();
+
+    //         if (!ValidateForm())
+    //         {
+    //             IsSaving = false;
+    //             StateHasChanged();
+    //             return;
+    //         }
+
+    //         var result = await FacturaService.Create(NuevaFactura);
+
+    //         if (result.Success && result.Data != null)
+    //         {
+    //             AlertComponent?.Show(
+    //                 $"Factura creada exitosamente. Número de factura: {result.Data.NumeroFactura}",
+    //                 AlertType.Success,
+    //                 "¡Éxito!"
+    //             );
+
+    //             await Task.Delay(2000); // Mostrar mensaje por 2 segundos
+    //             Navigation.NavigateTo($"/facturas/{result.Data.Id}");
+    //         }
+    //         else
+    //         {
+    //             AlertComponent?.Show(
+    //                 result.Message ?? "Error al crear la factura",
+    //                 AlertType.Danger,
+    //                 "Error"
+    //             );
+    //         }
+    //     }
+    //     catch (Exception ex)
+    //     {
+    //         AlertComponent?.Show(
+    //             $"Error inesperado: {ex.Message}",
+    //             AlertType.Danger,
+    //             "Error"
+    //         );
+    //     }
+    //     finally
+    //     {
+    //         IsSaving = false;
+    //         StateHasChanged();
+    //     }
+    // }
+
+    private bool ValidateForm()
+    {
+        var isValid = true;
+        var errors = new List<string>();
+
+        // Validar cliente usando ValidationHelper
+        if (NuevaFactura.ClienteId <= 0)
+        {
+            errors.Add(Constants.Mensajes.DatosRequeridos + ": Cliente");
+            isValid = false;
+        }
+
+        // Validar artículos
+        if (NuevaFactura.Detalles?.Any() != true)
+        {
+            errors.Add("Debe agregar al menos un artículo");
+            isValid = false;
+        }
+        else
+        {
+            foreach (var detalle in NuevaFactura.Detalles)
+            {
+                if (detalle.ArticuloId <= 0)
+                {
+                    errors.Add("Todos los artículos deben tener código válido");
+                    isValid = false;
+                    break;
+                }
+
+                if (!ValidationHelper.IsValidCantidad(detalle.Cantidad))
+                {
+                    errors.Add("La cantidad debe ser mayor a 0");
+                    isValid = false;
+                    break;
+                }
+
+                if (!ValidationHelper.IsValidPrecio(detalle.PrecioUnitario))
+                {
+                    errors.Add("El precio unitario debe ser mayor a 0");
+                    isValid = false;
+                    break;
+                }
+
+                // Validar stock si está disponible
+                if (detalle.StockDisponible.HasValue && detalle.Cantidad > detalle.StockDisponible.Value)
+                {
+                    errors.Add($"Stock insuficiente para el artículo {detalle.ArticuloCodigo} - {detalle.ArticuloNombre}");
+                    isValid = false;
+                    break;
+                }
+            }
+        }
+
+        // Validar totales si corresponde
+        if (TotalesCalculados != null)
+        {
+            // Verificar coherencia de cálculos
+            var calculatedBase = TotalesCalculados.SubTotal - TotalesCalculados.ValorDescuento;
+            if (Math.Abs(calculatedBase - TotalesCalculados.BaseImpuestos) > 0.01m)
+            {
+                errors.Add("Error en el cálculo de la base de impuestos");
+                isValid = false;
+            }
+            
+            var calculatedTotal = TotalesCalculados.BaseImpuestos + TotalesCalculados.ValorIVA;
+            if (Math.Abs(calculatedTotal - TotalesCalculados.Total) > 0.01m)
+            {
+                errors.Add("Error en el cálculo del total");
+                isValid = false;
+            }
+        }
+
+        if (!isValid)
+        {
+            AlertComponent?.Show(
+                string.Join(", ", errors),
+                AlertType.Warning,
+                "Validación"
+            );
+        }
+
+        return isValid;
+    }
+
+    private async Task CancelCreate()
+    {
+        if (ConfirmDialog != null)
+        {
+            var confirmed = await ConfirmDialog.ShowAsync(
+                "Cancelar Creación",
+                "¿Está seguro que desea cancelar? Se perderán todos los datos ingresados.",
+                ConfirmType.Warning
+            );
+
+            if (confirmed)
+            {
+                Navigation.NavigateTo("/facturas");
+            }
+        }
+    }
+
+    private string? GetFieldError(string fieldName)
+    {
+        // Implementar lógica de errores de validación personalizada
+        if (_messageStore != null && _editContext != null)
+        {
+            var fieldIdentifier = _editContext.Field(fieldName);
+            var errors = _messageStore[fieldIdentifier];
+            
+            return errors?.FirstOrDefault();
+        }
+        
+        return null;
+    }
+
+    public void Dispose()
+    {
+        // Eliminar manejadores de eventos para evitar fugas de memoria
+        if (_editContext != null)
+        {
+            _editContext.OnValidationRequested -= HandleValidationRequested;
+            _editContext.OnFieldChanged -= HandleFieldChanged;
+        }
+    }
+}

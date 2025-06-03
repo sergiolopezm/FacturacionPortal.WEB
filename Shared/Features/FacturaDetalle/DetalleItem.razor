@@ -7,7 +7,7 @@
     {
         <td class="text-center">
             <div class="form-check">
-                <input class="form-check-input" type="checkbox" @bind="IsSelected" @onchange="OnSelectionChanged" />
+                <input class="form-check-input" type="checkbox" checked="@IsSelected" @onchange="OnSelectionChanged" />
             </div>
         </td>
     }
@@ -23,7 +23,7 @@
         @if (IsEditable && IsEditMode)
         {
             <select class="form-select form-select-sm @(HasError ? "is-invalid" : "")"
-                    @bind="EditableDetalle.ArticuloId"
+                    value="@EditableDetalle.ArticuloId"
                     @onchange="OnArticuloChanged">
                 <option value="">Seleccionar artículo...</option>
                 @if (Articulos != null)
@@ -52,8 +52,8 @@
         @if (IsEditable && IsEditMode)
         {
             <input type="number" class="form-control form-control-sm text-center @(HasError ? "is-invalid" : "")"
-                   @bind="EditableDetalle.Cantidad"
-                   @onchange="OnCantidadChanged"
+                   value="@EditableDetalle.Cantidad"
+                   @onchange="OnCantidadChangedEvent"
                    min="1"
                    max="@MaxCantidad"
                    style="width: 80px;" />
@@ -68,8 +68,8 @@
         @if (IsEditable && IsEditMode)
         {
             <input type="number" class="form-control form-control-sm text-end @(HasError ? "is-invalid" : "")"
-                   @bind="EditableDetalle.PrecioUnitario"
-                   @onchange="OnPrecioChanged"
+                   value="@EditableDetalle.PrecioUnitario"
+                   @onchange="OnPrecioChangedEvent"
                    min="0.01"
                    step="0.01"
                    style="width: 120px;" />
@@ -227,10 +227,19 @@
                 EditableDetalle.ArticuloDescripcion = articulo.Descripcion;
                 EditableDetalle.PrecioUnitario = articulo.PrecioUnitario;
                 EditableDetalle.StockActual = articulo.Stock;
-                
+
                 await CalculateSubtotal();
                 await NotifyChanged();
             }
+        }
+    }
+
+    private async Task OnCantidadChangedEvent(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out int cantidad))
+        {
+            EditableDetalle.Cantidad = cantidad;
+            await OnCantidadChanged();
         }
     }
 
@@ -239,6 +248,15 @@
         await CalculateSubtotal();
         await ValidateStock();
         await NotifyChanged();
+    }
+
+    private async Task OnPrecioChangedEvent(ChangeEventArgs e)
+    {
+        if (decimal.TryParse(e.Value?.ToString(), out decimal precio))
+        {
+            EditableDetalle.PrecioUnitario = precio;
+            await OnPrecioChanged();
+        }
     }
 
     private async Task OnPrecioChanged()
@@ -291,7 +309,7 @@
         };
 
         IsEditMode = true;
-        
+
         if (OnEdit.HasDelegate)
         {
             await OnEdit.InvokeAsync(Detalle);

@@ -1,4 +1,5 @@
-﻿@if (IsVisible)
+﻿@using FacturacionPortal.WEB.Util
+@if (IsVisible)
 {
     <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);" @onclick="OnBackdropClick">
         <div class="modal-dialog @GetModalSizeClass()" @onclick:stopPropagation="true">
@@ -11,7 +12,7 @@
                     <h5 class="modal-title">@Title</h5>
                     @if (ShowCloseButton)
                     {
-                        <button type="button" class="btn-close" @onclick="Cancel" aria-label="Close"></button>
+                        <button type="button" class="btn-close" @onclick="OnCancelClicked" aria-label="Close"></button>
                     }
                 </div>
 
@@ -29,7 +30,7 @@
                 <div class="modal-footer">
                     @if (ShowCancelButton)
                     {
-                        <button type="button" class="btn @CancelButtonClass" @onclick="Cancel" disabled="@IsProcessing">
+                        <button type="button" class="btn @CancelButtonClass" @onclick="OnCancelClicked" disabled="@IsProcessing">
                             @if (IsProcessing && ProcessingAction == ConfirmAction.Cancel)
                             {
                                 <span class="spinner-border spinner-border-sm me-1"></span>
@@ -38,7 +39,7 @@
                         </button>
                     }
 
-                    <button type="button" class="btn @ConfirmButtonClass" @onclick="Confirm" disabled="@IsProcessing">
+                    <button type="button" class="btn @ConfirmButtonClass" @onclick="OnConfirmClicked" disabled="@IsProcessing">
                         @if (IsProcessing && ProcessingAction == ConfirmAction.Confirm)
                         {
                             <span class="spinner-border spinner-border-sm me-1"></span>
@@ -144,7 +145,7 @@
         };
     }
 
-    private async Task Confirm()
+    private async Task OnConfirmClicked()
     {
         if (IsProcessing) return;
 
@@ -172,7 +173,7 @@
         }
     }
 
-    private async Task Cancel()
+    private async Task OnCancelClicked()
     {
         if (IsProcessing) return;
 
@@ -204,7 +205,7 @@
     {
         if (CloseOnBackdrop && !IsProcessing)
         {
-            await Cancel();
+            await OnCancelClicked();
         }
     }
 

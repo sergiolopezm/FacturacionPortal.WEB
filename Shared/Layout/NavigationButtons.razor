@@ -1,103 +1,26 @@
-﻿@inject NavigationManager Navigation
+﻿@* NavigationButtons.razor *@
+@using FacturacionPortal.WEB.Util
+@inject NavigationManager Navigation
 @inject IJSRuntime JSRuntime
 
-<div class="navigation-buttons @ContainerClass">
-    @if (ShowBackButton)
+@code {    
+    public enum NavigationAction
     {
-        <button class="btn @BackButtonClass" @onclick="GoBack" disabled="@IsNavigating" title="@BackButtonTitle">
-            @if (IsNavigating && LastAction == NavigationAction.Back)
-            {
-                <span class="spinner-border spinner-border-sm me-1"></span>
-            }
-            else
-            {
-                <i class="bi @BackButtonIcon me-1"></i>
-            }
-            @BackButtonText
-        </button>
+        None,
+        Back,
+        Home,
+        Refresh,
+        Custom
     }
 
-    @if (ShowHomeButton)
+    public class BreadcrumbItem
     {
-        <button class="btn @HomeButtonClass" @onclick="GoHome" disabled="@IsNavigating" title="@HomeButtonTitle">
-            @if (IsNavigating && LastAction == NavigationAction.Home)
-            {
-                <span class="spinner-border spinner-border-sm me-1"></span>
-            }
-            else
-            {
-                <i class="bi @HomeButtonIcon me-1"></i>
-            }
-            @HomeButtonText
-        </button>
+        public string Text { get; set; } = string.Empty;
+        public string? Url { get; set; }
+        public string? Icon { get; set; }
+        public bool IsActive { get; set; }
     }
 
-    @if (ShowRefreshButton)
-    {
-        <button class="btn @RefreshButtonClass" @onclick="RefreshPage" disabled="@IsNavigating" title="@RefreshButtonTitle">
-            @if (IsNavigating && LastAction == NavigationAction.Refresh)
-            {
-                <span class="spinner-border spinner-border-sm me-1"></span>
-            }
-            else
-            {
-                <i class="bi @RefreshButtonIcon me-1"></i>
-            }
-            @RefreshButtonText
-        </button>
-    }
-
-    @if (CustomButtons != null)
-    {
-        @CustomButtons
-    }
-
-    @if (BreadcrumbItems != null && BreadcrumbItems.Any())
-    {
-        <nav aria-label="breadcrumb" class="@BreadcrumbClass">
-            <ol class="breadcrumb mb-0">
-                @foreach (var item in BreadcrumbItems)
-                {
-                    @if (item.IsActive)
-                    {
-                        <li class="breadcrumb-item active" aria-current="page">
-                            @if (!string.IsNullOrEmpty(item.Icon))
-                            {
-                                <i class="bi @item.Icon me-1"></i>
-                            }
-                            @item.Text
-                        </li>
-                    }
-                    else
-                    {
-                        <li class="breadcrumb-item">
-                            @if (!string.IsNullOrEmpty(item.Url))
-                            {
-                                <a href="@item.Url" class="text-decoration-none" @onclick="() => NavigateTo(item.Url)">
-                                    @if (!string.IsNullOrEmpty(item.Icon))
-                                    {
-                                        <i class="bi @item.Icon me-1"></i>
-                                    }
-                                    @item.Text
-                                </a>
-                            }
-                            else
-                            {
-                                @if (!string.IsNullOrEmpty(item.Icon))
-                                {
-                                    <i class="bi @item.Icon me-1"></i>
-                                }
-                                @item.Text
-                            }
-                        </li>
-                    }
-                }
-            </ol>
-        </nav>
-    }
-</div>
-
-@code {
     [Parameter] public bool ShowBackButton { get; set; } = true;
     [Parameter] public bool ShowHomeButton { get; set; } = false;
     [Parameter] public bool ShowRefreshButton { get; set; } = false;
@@ -146,29 +69,19 @@
             StateHasChanged();
 
             if (OnBack.HasDelegate)
-            {
                 await OnBack.InvokeAsync();
-            }
+            else if (!string.IsNullOrEmpty(CustomBackUrl))
+                Navigation.NavigateTo(CustomBackUrl);
             else
-            {
-                if (!string.IsNullOrEmpty(CustomBackUrl))
-                {
-                    Navigation.NavigateTo(CustomBackUrl);
-                }
-                else
-                {
-                    await JSRuntime.InvokeVoidAsync("history.back");
-                }
-            }
+                await JSRuntime.InvokeVoidAsync("history.back");
         }
-        catch (Exception)
+        catch
         {
-            // En caso de error, navegar al home
             Navigation.NavigateTo(HomeUrl);
         }
         finally
         {
-            await Task.Delay(100); // Pequeña demora para mostrar el spinner
+            await Task.Delay(100);
             IsNavigating = false;
             LastAction = NavigationAction.None;
             StateHasChanged();
@@ -186,13 +99,9 @@
             StateHasChanged();
 
             if (OnHome.HasDelegate)
-            {
                 await OnHome.InvokeAsync();
-            }
             else
-            {
                 Navigation.NavigateTo(HomeUrl);
-            }
         }
         finally
         {
@@ -214,13 +123,9 @@
             StateHasChanged();
 
             if (OnRefresh.HasDelegate)
-            {
                 await OnRefresh.InvokeAsync();
-            }
             else
-            {
                 await JSRuntime.InvokeVoidAsync("location.reload");
-            }
         }
         finally
         {
@@ -233,7 +138,7 @@
 
     private async Task NavigateTo(string? url)
     {
-        if (string.IsNullOrEmpty(url) || IsNavigating) return;
+        if (string.IsNullOrWhiteSpace(url) || IsNavigating) return;
 
         try
         {
@@ -241,13 +146,9 @@
             StateHasChanged();
 
             if (OnNavigate.HasDelegate)
-            {
                 await OnNavigate.InvokeAsync(url);
-            }
             else
-            {
                 Navigation.NavigateTo(url);
-            }
         }
         finally
         {
@@ -261,11 +162,9 @@
     {
         BreadcrumbItems ??= new List<BreadcrumbItem>();
 
-        // Desactivar elementos anteriores
+        // Desactivar cualquier breadcrumb activo anterior
         foreach (var item in BreadcrumbItems)
-        {
             item.IsActive = false;
-        }
 
         BreadcrumbItems.Add(new BreadcrumbItem
         {
@@ -291,19 +190,114 @@
     }
 }
 
-public class BreadcrumbItem
-{
-    public string Text { get; set; } = string.Empty;
-    public string? Url { get; set; }
-    public string? Icon { get; set; }
-    public bool IsActive { get; set; }
-}
+<div class="navigation-buttons @ContainerClass">
+    @* Botón VOLVER *@
+    @if (ShowBackButton)
+    {
+        <button class="btn @BackButtonClass"
+                @onclick="GoBack"
+                disabled="@IsNavigating"
+                title="@BackButtonTitle">
+            @if (IsNavigating && LastAction == NavigationAction.Back)
+            {
+                <span class="spinner-border spinner-border-sm me-1"></span>
+            }
+            else
+            {
+                <i class="bi @BackButtonIcon me-1"></i>
+            }
+            @BackButtonText
+        </button>
+    }
 
-public enum NavigationAction
-{
-    None,
-    Back,
-    Home,
-    Refresh,
-    Custom
-}
+    @* Botón INICIO *@
+    @if (ShowHomeButton)
+    {
+        <button class="btn @HomeButtonClass"
+                @onclick="GoHome"
+                disabled="@IsNavigating"
+                title="@HomeButtonTitle">
+            @if (IsNavigating && LastAction == NavigationAction.Home)
+            {
+                <span class="spinner-border spinner-border-sm me-1"></span>
+            }
+            else
+            {
+                <i class="bi @HomeButtonIcon me-1"></i>
+            }
+            @HomeButtonText
+        </button>
+    }
+
+    @* Botón REFRESH *@
+    @if (ShowRefreshButton)
+    {
+        <button class="btn @RefreshButtonClass"
+                @onclick="RefreshPage"
+                disabled="@IsNavigating"
+                title="@RefreshButtonTitle">
+            @if (IsNavigating && LastAction == NavigationAction.Refresh)
+            {
+                <span class="spinner-border spinner-border-sm me-1"></span>
+            }
+            else
+            {
+                <i class="bi @RefreshButtonIcon me-1"></i>
+            }
+            @RefreshButtonText
+        </button>
+    }
+
+    @* Botones personalizados *@
+    @if (CustomButtons is not null)
+    {
+        @CustomButtons
+    }
+
+    @* Breadcrumbs *@
+    @if (BreadcrumbItems?.Any() == true)
+    {
+        <nav aria-label="breadcrumb" class="@BreadcrumbClass">
+            <ol class="breadcrumb mb-0">
+                @foreach (var item in BreadcrumbItems)
+                {
+                    if (item.IsActive)
+                    {
+                        <li class="breadcrumb-item active" aria-current="page">
+                            @if (!string.IsNullOrEmpty(item.Icon))
+                            {
+                                <i class="bi @item.Icon me-1"></i>
+                            }
+                            @item.Text
+                        </li>
+                    }
+                    else
+                    {
+                        <li class="breadcrumb-item">
+                            @if (!string.IsNullOrEmpty(item.Url))
+                            {
+                                <a href="@item.Url"
+                                   class="text-decoration-none"
+                                   @onclick="() => NavigateTo(item.Url!)">
+                                    @if (!string.IsNullOrEmpty(item.Icon))
+                                    {
+                                        <i class="bi @item.Icon me-1"></i>
+                                    }
+                                    @item.Text
+                                </a>
+                            }
+                            else
+                            {
+                                @if (!string.IsNullOrEmpty(item.Icon))
+                                {
+                                    <i class="bi @item.Icon me-1"></i>
+                                }
+                                @item.Text
+                            }
+                        </li>
+                    }
+                }
+            </ol>
+        </nav>
+    }
+</div>

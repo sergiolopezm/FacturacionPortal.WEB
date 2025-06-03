@@ -1,4 +1,5 @@
-﻿@if (IsVisible)
+﻿@using FacturacionPortal.WEB.Util
+@if (IsVisible)
 {
     <div class="alert @GetAlertClass() @(IsDismissible ? "alert-dismissible" : "") fade show @CssClass" role="alert">
         @if (!string.IsNullOrEmpty(Icon))
@@ -137,16 +138,4 @@
     {
         _autoHideTimer?.Dispose();
     }
-}
-
-public enum AlertType
-{
-    Primary,
-    Secondary,
-    Success,
-    Danger,
-    Warning,
-    Info,
-    Light,
-    Dark
 }
