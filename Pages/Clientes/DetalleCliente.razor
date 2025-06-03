@@ -1,0 +1,627 @@
+﻿@page "/clientes/{id:int}"
+@using FacturacionPortal.WEB.Models.Facturacion
+@using FacturacionPortal.WEB.Services.Interface
+@using FacturacionPortal.WEB.Shared.Components
+@using FacturacionPortal.WEB.Components.Shared
+@using FacturacionPortal.WEB.Helpers
+@using FacturacionPortal.WEB.Util
+@using FacturacionPortal.WEB.Util.Extensions
+@using Microsoft.AspNetCore.Components.Authorization
+@inject IClienteService ClienteService
+@inject IFacturaService FacturaService
+@inject NavigationManager Navigation
+@inject IJSRuntime JSRuntime
+
+<PageTitle>Detalle Cliente - FacturacionPortal</PageTitle>
+
+<div class="detalle-cliente-container">
+    <!-- Header -->
+    <div class="page-header mb-4">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h2 class="mb-1">
+                    <i class="bi bi-person-circle text-primary me-2"></i>
+                    Detalle del Cliente
+                </h2>
+                <p class="text-muted mb-0">Información completa y facturas del cliente</p>
+            </div>
+            <div class="d-flex gap-2">
+                <button class="btn btn-outline-secondary" @onclick="GoBack">
+                    <i class="bi bi-arrow-left me-1"></i>Volver
+                </button>
+                @if (Cliente != null)
+                {
+                    <button class="btn btn-primary" @onclick="EditarCliente">
+                        <i class="bi bi-pencil me-1"></i>Editar
+                    </button>
+                    <button class="btn btn-success" @onclick="CrearFacturaParaCliente">
+                        <i class="bi bi-plus-circle me-1"></i>Nueva Factura
+                    </button>
+                }
+            </div>
+        </div>
+    </div>
+
+    <Alert @ref="AlertComponent" />
+
+    @if (IsLoading)
+    {
+        <Loading IsVisible="true" Text="Cargando información del cliente..." />
+    }
+    else if (Cliente == null)
+    {
+        <div class="text-center py-5">
+            <i class="bi bi-person-x display-1 text-muted"></i>
+            <h3 class="mt-3">Cliente no encontrado</h3>
+            <p class="text-muted">El cliente solicitado no existe o ha sido eliminado</p>
+            <button class="btn btn-primary" @onclick="GoBack">
+                <i class="bi bi-arrow-left me-1"></i>Volver a la lista
+            </button>
+        </div>
+    }
+    else
+    {
+        <div class="row g-4">
+            <!-- Columna Izquierda: Información del Cliente -->
+            <div class="col-lg-4">
+                <!-- Tarjeta Principal del Cliente -->
+                <div class="card client-profile-card shadow-sm mb-4">
+                    <div class="card-body text-center">
+                        <div class="client-avatar mb-3">
+                            <div class="avatar-placeholder">
+                                <i class="bi bi-person-fill"></i>
+                            </div>
+                        </div>
+                        
+                        <h4 class="mb-1">@Cliente.NombreCompleto</h4>
+                        <p class="text-muted mb-2">@Cliente.NumeroDocumento</p>
+                        
+                        <div class="client-badges mb-3">
+                            <span class="badge @(Cliente.Activo ? "bg-success" : "bg-danger")">
+                                @(Cliente.Activo ? "Activo" : "Inactivo")
+                            </span>
+                            @if (Cliente.TotalFacturas > 0)
+                            {
+                                <span class="badge bg-info">Cliente Frecuente</span>
+                            }
+                        </div>
+
+                        <div class="client-stats">
+                            <div class="row text-center">
+                                <div class="col-6">
+                                    <div class="stat-item">
+                                        <h5 class="stat-number text-primary">@Cliente.TotalFacturas</h5>
+                                        <small class="text-muted">Facturas</small>
+                                    </div>
+                                </div>
+                                <div class="col-6">
+                                    <div class="stat-item">
+                                        <h5 class="stat-number text-success">@Cliente.MontoTotalComprasFormateado</h5>
+                                        <small class="text-muted">Total Compras</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="client-actions mt-3">
+                            <div class="d-grid gap-2">
+                                <button class="btn btn-primary" @onclick="CrearFacturaParaCliente">
+                                    <i class="bi bi-plus-circle me-2"></i>Nueva Factura
+                                </button>
+                                <button class="btn btn-outline-primary" @onclick="EditarCliente">
+                                    <i class="bi bi-pencil me-2"></i>Editar Cliente
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Información de Contacto -->
+                <div class="card shadow-sm mb-4">
+                    <div class="card-header">
+                        <h6 class="card-title mb-0">
+                            <i class="bi bi-telephone me-2"></i>Información de Contacto
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="contact-item">
+                            <small class="text-muted">Teléfono</small>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span class="fw-bold">@Cliente.Telefono</span>
+                                <a href="tel:@Cliente.Telefono" class="btn btn-sm btn-outline-primary">
+                                    <i class="bi bi-telephone"></i>
+                                </a>
+                            </div>
+                        </div>
+                        
+                        @if (!string.IsNullOrEmpty(Cliente.Email))
+                        {
+                            <div class="contact-item">
+                                <small class="text-muted">Email</small>
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <span class="fw-bold">@Cliente.Email</span>
+                                    <a href="mailto:@Cliente.Email" class="btn btn-sm btn-outline-primary">
+                                        <i class="bi bi-envelope"></i>
+                                    </a>
+                                </div>
+                            </div>
+                        }
+                        
+                        <div class="contact-item mb-0">
+                            <small class="text-muted">Dirección</small>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span class="fw-bold">@Cliente.Direccion</span>
+                                <button class="btn btn-sm btn-outline-primary" @onclick="() => OpenMap(Cliente.Direccion)">
+                                    <i class="bi bi-geo-alt"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Información del Sistema -->
+                <div class="card shadow-sm">
+                    <div class="card-header">
+                        <h6 class="card-title mb-0">
+                            <i class="bi bi-info-circle me-2"></i>Información del Sistema
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="info-item">
+                            <small class="text-muted">ID Cliente</small>
+                            <div class="fw-bold">@Cliente.Id</div>
+                        </div>
+                        
+                        <div class="info-item">
+                            <small class="text-muted">Fecha de Registro</small>
+                            <div class="fw-bold">@Cliente.FechaCreacion.ToColombiaShortDateString()</div>
+                        </div>
+                        
+                        @if (Cliente.FechaModificacion.HasValue)
+                        {
+                            <div class="info-item">
+                                <small class="text-muted">Última Modificación</small>
+                                <div class="fw-bold">@Cliente.FechaModificacion.Value.ToColombiaShortDateString()</div>
+                            </div>
+                        }
+                        
+                        @if (!string.IsNullOrEmpty(Cliente.CreadoPor))
+                        {
+                            <div class="info-item">
+                                <small class="text-muted">Creado por</small>
+                                <div class="fw-bold">@Cliente.CreadoPor</div>
+                            </div>
+                        }
+                        
+                        @if (!string.IsNullOrEmpty(Cliente.ModificadoPor))
+                        {
+                            <div class="info-item mb-0">
+                                <small class="text-muted">Modificado por</small>
+                                <div class="fw-bold">@Cliente.ModificadoPor</div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <!-- Columna Derecha: Facturas del Cliente -->
+            <div class="col-lg-8">
+                <!-- Historial de Facturas -->
+                <div class="card shadow-sm">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="card-title mb-0">
+                            <i class="bi bi-receipt me-2"></i>Historial de Facturas
+                        </h5>
+                        <div class="d-flex gap-2">
+                            <select class="form-select form-select-sm" style="width: auto;" @onchange="OnEstadoFilterChanged">
+                                <option value="">Todos los estados</option>
+                                <option value="Activa">Activa</option>
+                                <option value="Anulada">Anulada</option>
+                                <option value="Pagada">Pagada</option>
+                            </select>
+                            <button class="btn btn-outline-primary btn-sm" @onclick="RefreshFacturas" disabled="@IsLoadingFacturas">
+                                @if (IsLoadingFacturas)
+                                {
+                                    <span class="spinner-border spinner-border-sm"></span>
+                                }
+                                else
+                                {
+                                    <i class="bi bi-arrow-clockwise"></i>
+                                }
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        @if (IsLoadingFacturas)
+                        {
+                            <div class="text-center py-4">
+                                <div class="spinner-border me-2"></div>
+                                <span>Cargando facturas...</span>
+                            </div>
+                        }
+                        else if (FacturasCliente?.Any() == true)
+                        {
+                            <div class="table-responsive">
+                                <table class="table table-hover">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Número</th>
+                                            <th>Fecha</th>
+                                            <th class="text-center">Artículos</th>
+                                            <th class="text-end">Total</th>
+                                            <th class="text-center">Estado</th>
+                                            <th class="text-center">Acciones</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var factura in FacturasCliente)
+                                        {
+                                            <tr class="@(factura.Estado == "Anulada" ? "table-danger" : "")">
+                                                <td>
+                                                    <strong>@factura.NumeroFactura</strong>
+                                                </td>
+                                                <td>
+                                                    <div>@factura.Fecha.ToColombiaShortDateString()</div>
+                                                    <small class="text-muted">@factura.Fecha.ToTimeString()</small>
+                                                </td>
+                                                <td class="text-center">
+                                                    <span class="badge bg-info">@factura.TotalArticulos</span>
+                                                </td>
+                                                <td class="text-end">
+                                                    <CurrencyDisplay Value="@factura.Total" ShowSymbol="true" />
+                                                </td>
+                                                <td class="text-center">
+                                                    <StatusBadge Status="@factura.Estado" />
+                                                </td>
+                                                <td class="text-center">
+                                                    <div class="btn-group btn-group-sm">
+                                                        <button class="btn btn-outline-primary" 
+                                                                @onclick="() => VerFactura(factura.Id)" 
+                                                                title="Ver detalle">
+                                                            <i class="bi bi-eye"></i>
+                                                        </button>
+                                                        @if (factura.Estado == "Activa")
+                                                        {
+                                                            <button class="btn btn-outline-secondary" 
+                                                                    @onclick="() => ImprimirFactura(factura.Id)" 
+                                                                    title="Imprimir">
+                                                                <i class="bi bi-printer"></i>
+                                                            </button>
+                                                        }
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <!-- Resumen de Facturas -->
+                            <div class="facturas-summary mt-4 p-3 bg-light rounded">
+                                <div class="row text-center">
+                                    <div class="col-md-3">
+                                        <div class="summary-item">
+                                            <h6 class="text-primary">@FacturasCliente.Count</h6>
+                                            <small class="text-muted">Total Facturas</small>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="summary-item">
+                                            <h6 class="text-success">@FacturasCliente.Count(f => f.Estado == "Activa")</h6>
+                                            <small class="text-muted">Activas</small>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="summary-item">
+                                            <h6 class="text-danger">@FacturasCliente.Count(f => f.Estado == "Anulada")</h6>
+                                            <small class="text-muted">Anuladas</small>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="summary-item">
+                                            <h6 class="text-info">@CurrencyHelper.FormatCurrency(FacturasCliente.Sum(f => f.Total))</h6>
+                                            <small class="text-muted">Total Vendido</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="text-center py-5">
+                                <i class="bi bi-receipt display-4 text-muted"></i>
+                                <h5 class="mt-3">Sin facturas registradas</h5>
+                                <p class="text-muted">Este cliente aún no tiene facturas asociadas</p>
+                                <button class="btn btn-primary" @onclick="CrearFacturaParaCliente">
+                                    <i class="bi bi-plus-circle me-2"></i>Crear Primera Factura
+                                </button>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- Confirmación -->
+    <Confirm @ref="ConfirmDialog" />
+</div>
+
+<style>
+    .detalle-cliente-container {
+        padding: 1rem;
+    }
+
+    .page-header {
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        padding: 1.5rem;
+        border-radius: 0.5rem;
+        border-left: 4px solid var(--bs-primary);
+    }
+
+    .client-profile-card {
+        border: none;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+    }
+
+    .client-avatar {
+        position: relative;
+        display: inline-block;
+    }
+
+    .avatar-placeholder {
+        width: 100px;
+        height: 100px;
+        background: rgba(255, 255, 255, 0.2);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 2.5rem;
+        color: white;
+        margin: 0 auto;
+    }
+
+    .client-badges .badge {
+        margin: 0 0.25rem;
+    }
+
+    .client-stats {
+        margin-top: 1rem;
+        padding-top: 1rem;
+        border-top: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    .stat-item .stat-number {
+        color: white;
+        font-weight: 700;
+        margin-bottom: 0.25rem;
+    }
+
+    .contact-item,
+    .info-item {
+        margin-bottom: 1rem;
+        padding-bottom: 0.75rem;
+        border-bottom: 1px solid var(--bs-border-color);
+    }
+
+    .contact-item:last-child,
+    .info-item:last-child {
+        border-bottom: none;
+        margin-bottom: 0;
+        padding-bottom: 0;
+    }
+
+    .summary-item h6 {
+        font-size: 1.25rem;
+        font-weight: 700;
+        margin-bottom: 0.25rem;
+    }
+
+    .facturas-summary {
+        border: 1px solid var(--bs-border-color);
+    }
+
+    .card {
+        border: none;
+        box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    }
+
+    .card-header {
+        background-color: var(--bs-light);
+        border-bottom: 1px solid var(--bs-border-color);
+    }
+
+    .table-danger {
+        --bs-table-bg: #f8d7da;
+        --bs-table-striped-bg: #f1aeb5;
+    }
+
+    @@media (max-width: 768px) {
+        .page-header {
+            padding: 1rem;
+        }
+
+        .avatar-placeholder {
+            width: 80px;
+            height: 80px;
+            font-size: 2rem;
+        }
+
+        .client-stats .row {
+            text-align: center;
+        }
+
+        .d-flex.gap-2 {
+            flex-direction: column;
+            gap: 0.5rem !important;
+        }
+    }
+</style>
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private ClienteDto? Cliente;
+    private List<FacturaDto>? FacturasCliente;
+    private Alert? AlertComponent;
+    private Confirm? ConfirmDialog;
+
+    private bool IsLoading = true;
+    private bool IsLoadingFacturas = false;
+    private string EstadoFiltro = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadCliente();
+        if (Cliente != null)
+        {
+            await LoadFacturasCliente();
+        }
+    }
+
+    private async Task LoadCliente()
+    {
+        try
+        {
+            IsLoading = true;
+            StateHasChanged();
+
+            var result = await ClienteService.GetById(Id);
+            if (result.Success && result.Data != null)
+            {
+                Cliente = result.Data;
+            }
+            else
+            {
+                AlertComponent?.Show(
+                    result.Message ?? "No se pudo cargar la información del cliente",
+                    AlertType.Warning,
+                    "Cliente no encontrado"
+                );
+            }
+        }
+        catch (Exception ex)
+        {
+            AlertComponent?.Show(
+                $"Error al cargar el cliente: {ex.Message}",
+                AlertType.Danger,
+                "Error"
+            );
+        }
+        finally
+        {
+            IsLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadFacturasCliente()
+    {
+        try
+        {
+            IsLoadingFacturas = true;
+            StateHasChanged();
+
+            var result = await FacturaService.GetByCliente(Id);
+            if (result.Success && result.Data != null)
+            {
+                FacturasCliente = result.Data;
+                
+                // Aplicar filtro si existe
+                if (!string.IsNullOrEmpty(EstadoFiltro))
+                {
+                    FacturasCliente = FacturasCliente.Where(f => f.Estado == EstadoFiltro).ToList();
+                }
+                
+                // Ordenar por fecha descendente
+                FacturasCliente = FacturasCliente.OrderByDescending(f => f.Fecha).ToList();
+            }
+            else
+            {
+                FacturasCliente = new List<FacturaDto>();
+            }
+        }
+        catch (Exception ex)
+        {
+            AlertComponent?.Show(
+                $"Error al cargar las facturas: {ex.Message}",
+                AlertType.Warning,
+                "Advertencia"
+            );
+            FacturasCliente = new List<FacturaDto>();
+        }
+        finally
+        {
+            IsLoadingFacturas = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task OnEstadoFilterChanged(ChangeEventArgs e)
+    {
+        EstadoFiltro = e.Value?.ToString() ?? "";
+        await LoadFacturasCliente();
+    }
+
+    private async Task RefreshFacturas()
+    {
+        await LoadFacturasCliente();
+    }
+
+    private void GoBack()
+    {
+        Navigation.NavigateTo("/clientes");
+    }
+
+    private void EditarCliente()
+    {
+        Navigation.NavigateTo($"/clientes/editar/{Id}");
+    }
+
+    private void CrearFacturaParaCliente()
+    {
+        Navigation.NavigateTo($"/facturas/crear?clienteId={Id}");
+    }
+
+    private void VerFactura(int facturaId)
+    {
+        Navigation.NavigateTo($"/facturas/{facturaId}");
+    }
+
+    private async Task ImprimirFactura(int facturaId)
+    {
+        try
+        {
+            // Implementar lógica de impresión
+            await JSRuntime.InvokeVoidAsync("window.open", $"/facturas/{facturaId}/print", "_blank");
+        }
+        catch (Exception ex)
+        {
+            AlertComponent?.Show(
+                $"Error al imprimir: {ex.Message}",
+                AlertType.Warning,
+                "Advertencia"
+            );
+        }
+    }
+
+    private async Task OpenMap(string direccion)
+    {
+        try
+        {
+            var encodedAddress = Uri.EscapeDataString(direccion);
+            var mapsUrl = $"https://www.google.com/maps/search/?api=1&query={encodedAddress}";
+            await JSRuntime.InvokeVoidAsync("window.open", mapsUrl, "_blank");
+        }
+        catch (Exception)
+        {
+            AlertComponent?.Show(
+                "No se pudo abrir el mapa",
+                AlertType.Warning,
+                "Advertencia"
+            );
+        }
+    }
+}

@@ -1,0 +1,646 @@
+﻿@page "/articulos/crear"
+@page "/articulos/editar/{Id:int}"
+@using FacturacionPortal.WEB.Models.Facturacion
+@using FacturacionPortal.WEB.Services.Interface
+@using FacturacionPortal.WEB.Shared.Components
+@using FacturacionPortal.WEB.Shared.Forms
+@using FacturacionPortal.WEB.Components.Shared
+@using FacturacionPortal.WEB.Helpers
+@using FacturacionPortal.WEB.Util
+@using FacturacionPortal.WEB.Util.Extensions
+@using Microsoft.AspNetCore.Components.Forms
+@inject IArticuloService ArticuloService
+@inject ICategoriaArticuloService CategoriaService
+@inject NavigationManager Navigation
+@inject IJSRuntime JSRuntime
+
+<PageTitle>@(IsEditing ? "Editar" : "Crear") Artículo - FacturacionPortal</PageTitle>
+
+<div class="formulario-articulo-container">
+    <!-- Header -->
+    <div class="page-header mb-4">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h2 class="mb-1">
+                    <i class="bi @(IsEditing ? "bi-pencil-square" : "bi-plus-circle-fill") text-primary me-2"></i>
+                    @(IsEditing ? "Editar" : "Crear") Artículo
+                </h2>
+                <p class="text-muted mb-0">@(IsEditing ? "Modifique la información del artículo" : "Complete la información para crear un nuevo artículo")</p>
+            </div>
+            <div class="d-flex gap-2">
+                <button class="btn btn-outline-secondary" @onclick="CancelForm">
+                    <i class="bi bi-x me-1"></i>Cancelar
+                </button>
+                <button class="btn btn-success" @onclick="SaveArticulo" disabled="@(IsSaving || !IsFormValid)">
+                    @if (IsSaving)
+                    {
+                        <span class="spinner-border spinner-border-sm me-1"></span>
+                    }
+                    else
+                    {
+                        <i class="bi bi-check-circle me-1"></i>
+                    }
+                    @(IsEditing ? "Actualizar" : "Guardar") Artículo
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <Alert @ref="AlertComponent" />
+
+    @if (IsLoading)
+    {
+        <Loading IsVisible="true" Text="@(IsEditing ? "Cargando artículo..." : "Cargando formulario...")" />
+    }
+    else
+    {
+        <EditForm Model="@ArticuloModel" OnValidSubmit="@HandleValidSubmit">
+            <DataAnnotationsValidator />
+
+            <div class="row">
+                <div class="col-lg-8">
+                    <!-- Información Básica -->
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0">
+                                <i class="bi bi-info-circle me-2"></i>Información Básica
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label class="form-label">Código *</label>
+                                        <InputText @bind-Value="ArticuloModel.Codigo"
+                                                   class=@($"form-control {GetFieldCssClass(nameof(ArticuloModel.Codigo))}")
+                                                   placeholder="Ej: ART001"
+                                                   maxlength="20" />
+                                        <ValidationMessage For="@(() => ArticuloModel.Codigo)" />
+                                        <div class="form-text">Código único del artículo (máximo 20 caracteres)</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label class="form-label">Categoría</label>
+                                        <select class="form-select @(GetFieldCssClass(nameof(ArticuloModel.CategoriaId)))"
+                                                @bind="ArticuloModel.CategoriaId">
+                                            <option value="">Sin categoría</option>
+                                            @if (CategoriasDisponibles != null)
+                                            {
+                                                @foreach (var categoria in CategoriasDisponibles)
+                                                {
+                                                    <option value="@categoria.Id">@categoria.Nombre</option>
+                                                }
+                                            }
+                                        </select>
+                                        <ValidationMessage For="@(() => ArticuloModel.CategoriaId)" />
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label">Nombre *</label>
+                                <InputText @bind-Value="ArticuloModel.Nombre"
+                                           class=@($"form-control {GetFieldCssClass(nameof(ArticuloModel.Nombre))}")
+                                           placeholder="Nombre del artículo"
+                                           maxlength="100" />
+                                <ValidationMessage For="@(() => ArticuloModel.Nombre)" />
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label">Descripción</label>
+                                <InputTextArea @bind-Value="ArticuloModel.Descripcion"
+                                               class=@($"form-control {GetFieldCssClass(nameof(ArticuloModel.Descripcion))}")
+                                               rows="3"
+                                               placeholder="Descripción detallada del artículo (opcional)"
+                                               maxlength="250" />
+                                <ValidationMessage For="@(() => ArticuloModel.Descripcion)" />
+                                <div class="form-text">Máximo 250 caracteres</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Información de Precios y Stock -->
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0">
+                                <i class="bi bi-currency-dollar me-2"></i>Precios y Stock
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label class="form-label">Precio Unitario *</label>
+                                        <div class="input-group">
+                                            <span class="input-group-text">$</span>
+                                            <InputNumber @bind-Value="ArticuloModel.PrecioUnitario"
+                                                         class=@($"form-control {GetFieldCssClass(nameof(ArticuloModel.PrecioUnitario))}")
+                                                         placeholder="0.00"
+                                                         step="0.01"
+                                                         min="0.01" />
+                                        </div>
+                                        <ValidationMessage For="@(() => ArticuloModel.PrecioUnitario)" />
+                                        <div class="form-text">Precio de venta al público</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label class="form-label">Stock Actual *</label>
+                                        <InputNumber @bind-Value="ArticuloModel.Stock"
+                                                     class=@($"form-control {GetFieldCssClass(nameof(ArticuloModel.Stock))}")
+                                                     placeholder="0"
+                                                     min="0" />
+                                        <ValidationMessage For="@(() => ArticuloModel.Stock)" />
+                                        <div class="form-text">Cantidad disponible en inventario</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label class="form-label">Stock Mínimo</label>
+                                        <InputNumber @bind-Value="ArticuloModel.StockMinimo"
+                                                     class=@($"form-control {GetFieldCssClass(nameof(ArticuloModel.StockMinimo))}")
+                                                     placeholder="5"
+                                                     min="0" />
+                                        <ValidationMessage For="@(() => ArticuloModel.StockMinimo)" />
+                                        <div class="form-text">Alerta cuando el stock sea menor o igual a este valor</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <div class="form-check form-switch mt-4">
+                                            <InputCheckbox @bind-Value="ArticuloModel.Activo"
+                                                           class="form-check-input"
+                                                           id="articuloActivo" />
+                                            <label class="form-check-label" for="articuloActivo">
+                                                Artículo Activo
+                                            </label>
+                                        </div>
+                                        <div class="form-text">Solo los artículos activos aparecen en las facturas</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Columna Derecha: Resumen -->
+                <div class="col-lg-4">
+                    <div class="card sticky-top" style="top: 20px;">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0">
+                                <i class="bi bi-eye me-2"></i>Vista Previa
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="preview-section">
+                                <div class="preview-item">
+                                    <small class="text-muted">Código:</small>
+                                    <div class="fw-bold">@(string.IsNullOrEmpty(ArticuloModel.Codigo) ? "No definido" : ArticuloModel.Codigo)</div>
+                                </div>
+
+                                <div class="preview-item">
+                                    <small class="text-muted">Nombre:</small>
+                                    <div class="fw-bold">@(string.IsNullOrEmpty(ArticuloModel.Nombre) ? "No definido" : ArticuloModel.Nombre)</div>
+                                </div>
+
+                                <div class="preview-item">
+                                    <small class="text-muted">Categoría:</small>
+                                    <div>@GetCategoriaNombre()</div>
+                                </div>
+
+                                <div class="preview-item">
+                                    <small class="text-muted">Precio:</small>
+                                    <div class="fw-bold text-success">
+                                        <CurrencyDisplay Value="@ArticuloModel.PrecioUnitario" ShowSymbol="true" />
+                                    </div>
+                                </div>
+
+                                <div class="preview-item">
+                                    <small class="text-muted">Stock:</small>
+                                    <div class="d-flex justify-content-between">
+                                        <span>Actual: <strong class="@GetStockClass()">@ArticuloModel.Stock</strong></span>
+                                        <span>Min: <strong>@ArticuloModel.StockMinimo</strong></span>
+                                    </div>
+                                </div>
+
+                                <div class="preview-item">
+                                    <small class="text-muted">Estado:</small>
+                                    <div>
+                                        <StatusBadge Status="@(ArticuloModel.Activo ? "activo" : "inactivo")" />
+                                    </div>
+                                </div>
+
+                                @if (!string.IsNullOrEmpty(ArticuloModel.Descripcion))
+                                {
+                                    <div class="preview-item">
+                                        <small class="text-muted">Descripción:</small>
+                                        <div class="small">@ArticuloModel.Descripcion</div>
+                                    </div>
+                                }
+                            </div>
+
+                            @if (IsEditing && OriginalArticulo != null)
+                            {
+                                <hr />
+                                <div class="info-section">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <small class="text-muted">Creado:</small>
+                                        <small>@OriginalArticulo.FechaCreacion.ToColombiaShortDateString()</small>
+                                    </div>
+                                    @if (OriginalArticulo.FechaModificacion.HasValue)
+                                    {
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <small class="text-muted">Modificado:</small>
+                                            <small>@OriginalArticulo.FechaModificacion.Value.ToColombiaShortDateString()</small>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
+
+                        @if (IsFormValid)
+                        {
+                            <div class="card-footer">
+                                <button class="btn btn-primary w-100" @onclick="SaveArticulo" disabled="@IsSaving">
+                                    @if (IsSaving)
+                                    {
+                                        <span class="spinner-border spinner-border-sm me-2"></span>
+                                        <span>@(IsEditing ? "Actualizando..." : "Guardando...")</span>
+                                    }
+                                    else
+                                    {
+                                        <i class="bi bi-check-circle me-2"></i>
+                                        <span>@(IsEditing ? "Actualizar" : "Guardar") Artículo</span>
+                                    }
+                                </button>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </EditForm>
+    }
+
+    <!-- Confirmación -->
+    <Confirm @ref="ConfirmDialog" />
+</div>
+
+<style>
+    .formulario-articulo-container {
+        padding: 1rem;
+    }
+
+    .page-header {
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        padding: 1.5rem;
+        border-radius: 0.5rem;
+        border-left: 4px solid var(--bs-primary);
+    }
+
+    .card {
+        border: none;
+        box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    }
+
+    .card-header {
+        background-color: var(--bs-light);
+        border-bottom: 1px solid var(--bs-border-color);
+    }
+
+    .preview-section {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+    }
+
+    .preview-item {
+        padding-bottom: 0.75rem;
+        border-bottom: 1px solid var(--bs-border-color);
+    }
+
+        .preview-item:last-child {
+            border-bottom: none;
+            padding-bottom: 0;
+        }
+
+    .info-section {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    .sticky-top {
+        position: sticky;
+        z-index: 1020;
+    }
+
+    @@media (max-width: 991.98px) {
+        .sticky-top
+
+    {
+        position: relative;
+        top: auto !important;
+    }
+
+    }
+
+    .is-invalid {
+        border-color: #dc3545;
+    }
+
+    .is-valid {
+        border-color: #198754;
+    }
+</style>
+
+@code {
+    [Parameter] public int? Id { get; set; }
+
+    private ArticuloDto ArticuloModel = new();
+    private ArticuloDto? OriginalArticulo;
+    private List<CategoriaArticuloDto>? CategoriasDisponibles;
+
+    private Alert? AlertComponent;
+    private Confirm? ConfirmDialog;
+    private EditContext? EditContext;
+
+    private bool IsLoading = true;
+    private bool IsSaving = false;
+    private bool IsEditing => Id.HasValue;
+    private bool IsFormValid => EditContext?.Validate() == true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        ArticuloModel = new ArticuloDto
+        {
+            Activo = true,
+            StockMinimo = Constants.Facturacion.StockMinimoDefault
+        };
+
+        EditContext = new EditContext(ArticuloModel);
+
+        await LoadCategorias();
+
+        if (IsEditing)
+        {
+            await LoadArticulo();
+        }
+
+        IsLoading = false;
+    }
+
+    private async Task LoadCategorias()
+    {
+        try
+        {
+            var result = await CategoriaService.GetAll();
+            if (result.Success && result.Data != null)
+            {
+                CategoriasDisponibles = result.Data.Where(c => c.Activo).ToList();
+            }
+            else
+            {
+                CategoriasDisponibles = new List<CategoriaArticuloDto>();
+            }
+        }
+        catch (Exception)
+        {
+            CategoriasDisponibles = new List<CategoriaArticuloDto>();
+        }
+    }
+
+    private async Task LoadArticulo()
+    {
+        if (!Id.HasValue) return;
+
+        try
+        {
+            var result = await ArticuloService.GetById(Id.Value);
+            if (result.Success && result.Data != null)
+            {
+                OriginalArticulo = result.Data;
+                ArticuloModel = new ArticuloDto
+                {
+                    Id = result.Data.Id,
+                    Codigo = result.Data.Codigo,
+                    Nombre = result.Data.Nombre,
+                    Descripcion = result.Data.Descripcion,
+                    PrecioUnitario = result.Data.PrecioUnitario,
+                    Stock = result.Data.Stock,
+                    StockMinimo = result.Data.StockMinimo,
+                    CategoriaId = result.Data.CategoriaId,
+                    Activo = result.Data.Activo,
+                    FechaCreacion = result.Data.FechaCreacion,
+                    FechaModificacion = result.Data.FechaModificacion
+                };
+
+                EditContext = new EditContext(ArticuloModel);
+            }
+            else
+            {
+                AlertComponent?.Show(
+                    result.Message ?? "Artículo no encontrado",
+                    AlertType.Danger,
+                    "Error"
+                );
+
+                Navigation.NavigateTo("/articulos");
+            }
+        }
+        catch (Exception ex)
+        {
+            AlertComponent?.Show(
+                $"Error al cargar el artículo: {ex.Message}",
+                AlertType.Danger,
+                "Error"
+            );
+        }
+    }
+
+    private async Task HandleValidSubmit()
+    {
+        await SaveArticulo();
+    }
+
+    private async Task SaveArticulo()
+    {
+        if (IsSaving || !IsFormValid) return;
+
+        try
+        {
+            IsSaving = true;
+            StateHasChanged();
+
+            if (!ValidateForm())
+            {
+                return;
+            }
+
+            if (IsEditing)
+            {
+                var result = await ArticuloService.Update(Id!.Value, ArticuloModel);
+                if (result.Success && result.Data != null)
+                {
+                    AlertComponent?.Show(
+                        "Artículo actualizado exitosamente",
+                        AlertType.Success,
+                        "¡Éxito!"
+                    );
+
+                    await Task.Delay(1500);
+                    Navigation.NavigateTo("/articulos");
+                }
+                else
+                {
+                    AlertComponent?.Show(
+                        result.Message ?? "Error al actualizar el artículo",
+                        AlertType.Danger,
+                        "Error"
+                    );
+                }
+            }
+            else
+            {
+                var result = await ArticuloService.Create(ArticuloModel);
+                if (result.Success && result.Data != null)
+                {
+                    AlertComponent?.Show(
+                        $"Artículo creado exitosamente. Código: {result.Data.Codigo}",
+                        AlertType.Success,
+                        "¡Éxito!"
+                    );
+
+                    await Task.Delay(1500);
+                    Navigation.NavigateTo("/articulos");
+                }
+                else
+                {
+                    AlertComponent?.Show(
+                        result.Message ?? "Error al crear el artículo",
+                        AlertType.Danger,
+                        "Error"
+                    );
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            AlertComponent?.Show(
+                $"Error inesperado: {ex.Message}",
+                AlertType.Danger,
+                "Error"
+            );
+        }
+        finally
+        {
+            IsSaving = false;
+            StateHasChanged();
+        }
+    }
+
+    private bool ValidateForm()
+    {
+        var isValid = true;
+        var errors = new List<string>();
+
+        if (string.IsNullOrWhiteSpace(ArticuloModel.Codigo))
+        {
+            errors.Add("El código del artículo es requerido");
+            isValid = false;
+        }
+        else if (!ValidationHelper.IsValidCodigoArticulo(ArticuloModel.Codigo))
+        {
+            errors.Add("El código del artículo contiene caracteres no válidos");
+            isValid = false;
+        }
+
+        if (string.IsNullOrWhiteSpace(ArticuloModel.Nombre))
+        {
+            errors.Add("El nombre del artículo es requerido");
+            isValid = false;
+        }
+
+        if (!ValidationHelper.IsValidPrecio(ArticuloModel.PrecioUnitario))
+        {
+            errors.Add("El precio unitario debe ser mayor a 0");
+            isValid = false;
+        }
+
+        if (!ValidationHelper.IsValidStock(ArticuloModel.Stock))
+        {
+            errors.Add("El stock debe ser un valor válido (0 o mayor)");
+            isValid = false;
+        }
+
+        if (!ValidationHelper.IsValidStock(ArticuloModel.StockMinimo))
+        {
+            errors.Add("El stock mínimo debe ser un valor válido (0 o mayor)");
+            isValid = false;
+        }
+
+        if (!isValid)
+        {
+            AlertComponent?.Show(
+                string.Join(", ", errors),
+                AlertType.Warning,
+                "Validación"
+            );
+        }
+
+        return isValid;
+    }
+
+    private async Task CancelForm()
+    {
+        if (ConfirmDialog != null)
+        {
+            var confirmed = await ConfirmDialog.ShowAsync(
+                "Cancelar",
+                "¿Está seguro que desea cancelar? Se perderán todos los cambios no guardados.",
+                ConfirmType.Warning
+            );
+
+            if (confirmed)
+            {
+                Navigation.NavigateTo("/articulos");
+            }
+        }
+    }
+
+    private string GetFieldCssClass(string fieldName)
+    {
+        if (EditContext == null) return "";
+
+        var fieldIdentifier = EditContext.Field(fieldName);
+        var isModified = EditContext.IsModified(fieldIdentifier);
+        var isValid = !EditContext.GetValidationMessages(fieldIdentifier).Any();
+
+        if (!isModified) return "";
+
+        return isValid ? "is-valid" : "is-invalid";
+    }
+
+    private string GetCategoriaNombre()
+    {
+        if (!ArticuloModel.CategoriaId.HasValue || CategoriasDisponibles == null)
+            return "Sin categoría";
+
+        var categoria = CategoriasDisponibles.FirstOrDefault(c => c.Id == ArticuloModel.CategoriaId.Value);
+        return categoria?.Nombre ?? "Sin categoría";
+    }
+
+    private string GetStockClass()
+    {
+        if (ArticuloModel.Stock <= 0)
+            return "text-danger";
+
+        if (ArticuloModel.Stock <= ArticuloModel.StockMinimo)
+            return "text-warning";
+
+        return "text-success";
+    }
+}

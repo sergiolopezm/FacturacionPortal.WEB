@@ -1,0 +1,1048 @@
+﻿@page "/reportes/clientes-frecuentes"
+@using FacturacionPortal.WEB.Models.Facturacion
+@using FacturacionPortal.WEB.Services.Interface
+@using FacturacionPortal.WEB.Shared.Components
+@using FacturacionPortal.WEB.Components.Shared
+@using FacturacionPortal.WEB.Helpers
+@using FacturacionPortal.WEB.Util
+@using FacturacionPortal.WEB.Util.Extensions
+@inject IReporteService ReporteService
+@inject IClienteService ClienteService
+@inject IFacturaService FacturaService
+@inject NavigationManager Navigation
+@inject IJSRuntime JSRuntime
+
+<PageTitle>Clientes Frecuentes - FacturacionPortal</PageTitle>
+
+<div class="clientes-frecuentes-container">
+    <!-- Header -->
+    <div class="page-header mb-4">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h2 class="mb-1">
+                    <i class="bi bi-star-fill text-warning me-2"></i>
+                    Clientes Frecuentes
+                </h2>
+                <p class="text-muted mb-0">Análisis de clientes con mayor actividad y fidelidad</p>
+            </div>
+            <div class="d-flex gap-2">
+                <button class="btn btn-outline-secondary" @onclick="ExportarReporte" disabled="@IsLoading">
+                    <i class="bi bi-download me-1"></i>Exportar
+                </button>
+                <button class="btn btn-outline-primary" @onclick="GenerarReporte" disabled="@IsLoading">
+                    @if (IsLoading)
+                    {
+                        <span class="spinner-border spinner-border-sm me-1"></span>
+                    }
+                    else
+                    {
+                        <i class="bi bi-arrow-clockwise me-1"></i>
+                    }
+                    Actualizar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <Alert @ref="AlertComponent" />
+
+    <!-- Filtros de Reporte -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-header">
+            <h6 class="card-title mb-0">
+                <i class="bi bi-sliders me-2"></i>Parámetros del Reporte
+            </h6>
+        </div>
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-3">
+                    <label class="form-label">Fecha Inicio *</label>
+                    <input type="date" 
+                           class="form-control @(HasFechaError ? "is-invalid" : "")"
+                           @bind="FechaInicio"
+                           max="@DateTime.Now.ToString("yyyy-MM-dd")" />
+                    @if (HasFechaError)
+                    {
+                        <div class="invalid-feedback">@FechaErrorMessage</div>
+                    }
+                </div>
+
+                <div class="col-md-3">
+                    <label class="form-label">Fecha Fin *</label>
+                    <input type="date" 
+                           class="form-control @(HasFechaError ? "is-invalid" : "")"
+                           @bind="FechaFin"
+                           max="@DateTime.Now.ToString("yyyy-MM-dd")" />
+                </div>
+
+                <div class="col-md-2">
+                    <label class="form-label">Top</label>
+                    <select class="form-select" @bind="TopClientes">
+                        <option value="5">Top 5</option>
+                        <option value="10">Top 10</option>
+                        <option value="20">Top 20</option>
+                        <option value="50">Top 50</option>
+                        <option value="100">Top 100</option>
+                    </select>
+                </div>
+
+                <div class="col-md-3">
+                    <label class="form-label">Orden por</label>
+                    <select class="form-select" @bind="CriterioOrden">
+                        <option value="monto">Monto Total</option>
+                        <option value="facturas">Número Facturas</option>
+                        <option value="reciente">Última Compra</option>
+                        <option value="promedio">Compra Promedio</option>
+                    </select>
+                </div>
+
+                <div class="col-md-1">
+                    <label class="form-label">&nbsp;</label>
+                    <button class="btn btn-primary w-100" @onclick="GenerarReporte" disabled="@(IsLoading || !EsFechaValida)">
+                        @if (IsLoading)
+                        {
+                            <span class="spinner-border spinner-border-sm"></span>
+                        }
+                        else
+                        {
+                            <i class="bi bi-play-fill"></i>
+                        }
+                    </button>
+                </div>
+            </div>
+
+            <!-- Rangos rápidos -->
+            <div class="mt-3">
+                <small class="text-muted me-2">Rangos rápidos:</small>
+                <div class="btn-group btn-group-sm">
+                    <button class="btn btn-outline-secondary" @onclick="SetHoy">Hoy</button>
+                    <button class="btn btn-outline-secondary" @onclick="SetAyer">Ayer</button>
+                    <button class="btn btn-outline-secondary" @onclick="SetEstaSemana">Esta Semana</button>
+                    <button class="btn btn-outline-secondary" @onclick="SetEsteMes">Este Mes</button>
+                    <button class="btn btn-outline-secondary" @onclick="SetMesAnterior">Mes Anterior</button>
+                    <button class="btn btn-outline-secondary" @onclick="SetEsteAño">Este Año</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @if (ReporteGenerado && _clientesFrecuentes != null)
+    {
+        <!-- Resumen Ejecutivo -->
+        <div class="row g-3 mb-4">
+            <div class="col-lg-3 col-md-6">
+                <div class="metric-card card border-0 shadow-sm">
+                    <div class="card-body text-center">
+                        <div class="metric-icon bg-primary text-white rounded-circle mx-auto mb-2">
+                            <i class="bi bi-people"></i>
+                        </div>
+                        <h3 class="metric-number text-primary">@TotalClientesAnalisis</h3>
+                        <small class="text-muted">Clientes Analizados</small>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-3 col-md-6">
+                <div class="metric-card card border-0 shadow-sm">
+                    <div class="card-body text-center">
+                        <div class="metric-icon bg-success text-white rounded-circle mx-auto mb-2">
+                            <i class="bi bi-receipt"></i>
+                        </div>
+                        <h3 class="metric-number text-success">@TotalFacturasClientes</h3>
+                        <small class="text-muted">Facturas Generadas</small>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-3 col-md-6">
+                <div class="metric-card card border-0 shadow-sm">
+                    <div class="card-body text-center">
+                        <div class="metric-icon bg-warning text-white rounded-circle mx-auto mb-2">
+                            <i class="bi bi-currency-dollar"></i>
+                        </div>
+                        <h3 class="metric-number text-warning">@CurrencyHelper.FormatCurrency(TotalMontoClientes)</h3>
+                        <small class="text-muted">Monto Total</small>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-3 col-md-6">
+                <div class="metric-card card border-0 shadow-sm">
+                    <div class="card-body text-center">
+                        <div class="metric-icon bg-info text-white rounded-circle mx-auto mb-2">
+                            <i class="bi bi-graph-up"></i>
+                        </div>
+                        <h3 class="metric-number text-info">@CurrencyHelper.FormatCurrency(PromedioCompraPorCliente)</h3>
+                        <small class="text-muted">Compra Promedio</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Lista de Clientes Frecuentes -->
+        <div class="card shadow-sm mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-list-ol me-2"></i>Ranking de Clientes (Top @TopClientes)
+                </h5>
+                <div class="d-flex gap-2">
+                    <span class="badge bg-primary">@_clientesFrecuentes.Count cliente(s)</span>
+                    <div class="dropdown">
+                        <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                            <i class="bi bi-three-dots"></i>
+                        </button>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="#" @onclick="VerDetalleCompleto">Ver detalle completo</a></li>
+                            <li><a class="dropdown-item" href="#" @onclick="AnalisisSegmentacion">Análisis de segmentación</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="#" @onclick="ExportarReporte">Exportar datos</a></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-dark">
+                            <tr>
+                                <th style="width: 60px;" class="text-center">Rank</th>
+                                <th>Cliente</th>
+                                <th class="text-center" style="width: 100px;">Facturas</th>
+                                <th class="text-end" style="width: 150px;">Monto Total</th>
+                                <th class="text-end" style="width: 130px;">Compra Promedio</th>
+                                <th class="text-center" style="width: 120px;">Última Compra</th>
+                                <th class="text-center" style="width: 100px;">Fidelidad</th>
+                                <th class="text-center" style="width: 80px;">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var (cliente, index) in _clientesFrecuentes.Select((c, i) => (c, i + 1)))
+                            {
+                                <tr class="@GetRowClass(index)">
+                                    <td class="text-center">
+                                        <div class="rank-badge @GetRankBadgeClass(index)">
+                                            @if (index <= 3)
+                                            {
+                                                <i class="bi @GetRankIcon(index)"></i>
+                                            }
+                                            else
+                                            {
+                                                <span>@index</span>
+                                            }
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div class="d-flex align-items-center">
+                                            <div class="client-avatar me-3">
+                                                <i class="bi bi-person-circle text-primary"></i>
+                                            </div>
+                                            <div>
+                                                <div class="fw-bold">@cliente.NombreCompleto</div>
+                                                <small class="text-muted">@cliente.NumeroDocumento</small>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td class="text-center">
+                                        <span class="badge bg-primary fs-6">@cliente.TotalFacturas</span>
+                                    </td>
+                                    <td class="text-end">
+                                        <div class="fw-bold">
+                                            <CurrencyDisplay Value="@cliente.MontoTotalCompras" ShowSymbol="true" />
+                                        </div>
+                                    </td>
+                                    <td class="text-end">
+                                        <CurrencyDisplay Value="@CalcularPromedioCompra(cliente)" ShowSymbol="true" />
+                                    </td>
+                                    <td class="text-center">
+                                        @if (cliente.UltimaCompra.HasValue)
+                                        {
+                                            <div>@cliente.UltimaCompra.Value.ToColombiaShortDateString()</div>
+                                            <small class="text-muted">@CalcularDiasUltimaCompra(cliente.UltimaCompra.Value) días</small>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">N/A</span>
+                                        }
+                                    </td>
+                                    <td class="text-center">
+                                        <div class="fidelity-indicator">
+                                            @{
+                                                var nivelFidelidad = CalcularNivelFidelidad(cliente);
+                                            }
+                                            <span class="badge @GetFidelityBadgeClass(nivelFidelidad)">
+                                                @GetFidelityText(nivelFidelidad)
+                                            </span>
+                                        </div>
+                                    </td>
+                                    <td class="text-center">
+                                        <div class="btn-group btn-group-sm">
+                                            <button class="btn btn-outline-primary" 
+                                                    @onclick="() => VerDetalleCliente(cliente.ClienteId)" 
+                                                    title="Ver perfil">
+                                                <i class="bi bi-eye"></i>
+                                            </button>
+                                            <button class="btn btn-outline-info" 
+                                                    @onclick="() => VerFacturasCliente(cliente.ClienteId)" 
+                                                    title="Ver facturas">
+                                                <i class="bi bi-receipt-cutoff"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                        <tfoot class="table-light">
+                            <tr class="fw-bold">
+                                <td colspan="2" class="text-end">TOTAL:</td>
+                                <td class="text-center">@TotalFacturasClientes</td>
+                                <td class="text-end">
+                                    <CurrencyDisplay Value="@TotalMontoClientes" ShowSymbol="true" CssClass="fs-5 text-success" />
+                                </td>
+                                <td class="text-end">
+                                    <CurrencyDisplay Value="@PromedioCompraPorCliente" ShowSymbol="true" />
+                                </td>
+                                <td colspan="3"></td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Análisis de Segmentación -->
+        <div class="row g-4 mb-4">
+            <div class="col-lg-6">
+                <div class="card shadow-sm">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">
+                            <i class="bi bi-pie-chart me-2"></i>Segmentación por Fidelidad
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="segmentation-chart">
+                            @{
+                                var platino = _clientesFrecuentes.Count(c => CalcularNivelFidelidad(c) == "Platino");
+                                var oro = _clientesFrecuentes.Count(c => CalcularNivelFidelidad(c) == "Oro");
+                                var plata = _clientesFrecuentes.Count(c => CalcularNivelFidelidad(c) == "Plata");
+                                var bronce = _clientesFrecuentes.Count(c => CalcularNivelFidelidad(c) == "Bronce");
+                            }
+                            
+                            <div class="segment-item">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div class="d-flex align-items-center">
+                                        <div class="color-indicator bg-platinum me-2"></div>
+                                        <span>Platino</span>
+                                    </div>
+                                    <div class="text-end">
+                                        <strong>@platino</strong>
+                                        <small class="text-muted">(@(_clientesFrecuentes.Count > 0 ? (platino * 100.0 / _clientesFrecuentes.Count).ToString("F1") : "0")%)</small>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="segment-item">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div class="d-flex align-items-center">
+                                        <div class="color-indicator bg-warning me-2"></div>
+                                        <span>Oro</span>
+                                    </div>
+                                    <div class="text-end">
+                                        <strong>@oro</strong>
+                                        <small class="text-muted">(@(_clientesFrecuentes.Count > 0 ? (oro * 100.0 / _clientesFrecuentes.Count).ToString("F1") : "0")%)</small>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="segment-item">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div class="d-flex align-items-center">
+                                        <div class="color-indicator bg-secondary me-2"></div>
+                                        <span>Plata</span>
+                                    </div>
+                                    <div class="text-end">
+                                        <strong>@plata</strong>
+                                        <small class="text-muted">(@(_clientesFrecuentes.Count > 0 ? (plata * 100.0 / _clientesFrecuentes.Count).ToString("F1") : "0")%)</small>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="segment-item">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div class="d-flex align-items-center">
+                                        <div class="color-indicator bg-bronze me-2"></div>
+                                        <span>Bronce</span>
+                                    </div>
+                                    <div class="text-end">
+                                        <strong>@bronce</strong>
+                                        <small class="text-muted">(@(_clientesFrecuentes.Count > 0 ? (bronce * 100.0 / _clientesFrecuentes.Count).ToString("F1") : "0")%)</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-6">
+                <div class="card shadow-sm">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">
+                            <i class="bi bi-graph-up me-2"></i>Análisis de Actividad
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="activity-stats">
+                            <div class="stat-item">
+                                <div class="stat-label">Clientes Activos (últimos 30 días)</div>
+                                <div class="stat-value text-success">
+                                    @ClientesActivosRecientes
+                                    <small class="text-muted">(@(_clientesFrecuentes.Count > 0 ? (ClientesActivosRecientes * 100.0 / _clientesFrecuentes.Count).ToString("F1") : "0")%)</small>
+                                </div>
+                            </div>
+
+                            <div class="stat-item">
+                                <div class="stat-label">Frecuencia Promedio de Compra</div>
+                                <div class="stat-value text-primary">
+                                    @FrecuenciaPromedioCompra.ToString("F1") días
+                                </div>
+                            </div>
+
+                            <div class="stat-item">
+                                <div class="stat-label">Cliente con Mayor Actividad</div>
+                                <div class="stat-value text-warning">
+                                    @(_clientesFrecuentes.FirstOrDefault()?.NombreCompleto ?? "N/A")
+                                    <small class="text-muted">(@(_clientesFrecuentes.FirstOrDefault()?.TotalFacturas ?? 0) facturas)</small>
+                                </div>
+                            </div>
+
+                            <div class="stat-item">
+                                <div class="stat-label">Ticket Promedio más Alto</div>
+                                <div class="stat-value text-info">
+                                    @CurrencyHelper.FormatCurrency(TicketPromedioMasAlto)
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Insights y Recomendaciones -->
+        <div class="row g-4 mb-4">
+            <div class="col-lg-6">
+                <div class="card shadow-sm">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">
+                            <i class="bi bi-lightbulb me-2"></i>Insights de Clientes
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="insights-list">
+                            @if (_clientesFrecuentes.Any())
+                            {
+                                var clienteTop = _clientesFrecuentes.First();
+                                <div class="insight-item">
+                                    <i class="bi bi-star-fill text-warning me-2"></i>
+                                    <span><strong>@clienteTop.NombreCompleto</strong> es el cliente más valioso con @CurrencyHelper.FormatCurrency(clienteTop.MontoTotalCompras) en compras.</span>
+                                </div>
+                            }
+
+                            @if (_clientesFrecuentes.Count >= 3)
+                            {
+                                var top3Porcentaje = _clientesFrecuentes.Take(3).Sum(c => c.MontoTotalCompras) / TotalMontoClientes * 100;
+                                <div class="insight-item">
+                                    <i class="bi bi-pie-chart-fill text-info me-2"></i>
+                                    <span>Los 3 mejores clientes representan el <strong>@top3Porcentaje.ToString("F1")%</strong> de las ventas totales.</span>
+                                </div>
+                            }
+
+                            <div class="insight-item">
+                                <i class="bi bi-calculator text-success me-2"></i>
+                                <span>La compra promedio por cliente es de <strong>@CurrencyHelper.FormatCurrency(PromedioCompraPorCliente)</strong>.</span>
+                            </div>
+
+                            <div class="insight-item">
+                                <i class="bi bi-clock text-primary me-2"></i>
+                                <span>@ClientesActivosRecientes cliente(s) han comprado en los últimos 30 días.</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-6">
+                <div class="card shadow-sm">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">
+                            <i class="bi bi-clipboard-check me-2"></i>Estrategias de Fidelización
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="recommendations-list">
+                            <div class="recommendation-item">
+                                <i class="bi bi-gift text-success me-2"></i>
+                                <span>Crea programas de lealtad para clientes Platino y Oro con descuentos exclusivos.</span>
+                            </div>
+                            <div class="recommendation-item">
+                                <i class="bi bi-envelope text-warning me-2"></i>
+                                <span>Implementa campañas de reactivación para clientes con compras antiguas.</span>
+                            </div>
+                            <div class="recommendation-item">
+                                <i class="bi bi-percent text-info me-2"></i>
+                                <span>Ofrece promociones personalizadas basadas en el historial de compras.</span>
+                            </div>
+                            <div class="recommendation-item">
+                                <i class="bi bi-calendar-event text-primary me-2"></i>
+                                <span>Programa comunicaciones regulares con tu top 20% de clientes.</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Período del Reporte -->
+        <div class="card shadow-sm">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-calendar3 me-2"></i>Información del Período
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3">
+                        <div class="info-item text-center">
+                            <div class="info-label">Período Analizado</div>
+                            <div class="info-value">
+                                @FechaInicio.ToColombiaShortDateString() - @FechaFin.ToColombiaShortDateString()
+                            </div>
+                            <small class="text-muted">@CalcularDiasReporte() día(s)</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="info-item text-center">
+                            <div class="info-label">Clientes Analizados</div>
+                            <div class="info-value">@_clientesFrecuentes.Count</div>
+                            <small class="text-muted">de @TopClientes solicitados</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="info-item text-center">
+                            <div class="info-label">Criterio de Orden</div>
+                            <div class="info-value">@GetCriterioTexto()</div>
+                            <small class="text-muted">ordenamiento aplicado</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="info-item text-center">
+                            <div class="info-label">Generado</div>
+                            <div class="info-value">@DateTime.Now.ToColombiaShortDateString()</div>
+                            <small class="text-muted">@DateTime.Now.ToTimeString()</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+    else if (!IsLoading)
+    {
+        <div class="text-center py-5">
+            <i class="bi bi-star display-1 text-muted"></i>
+            <h4 class="mt-3">Genere su Reporte de Clientes Frecuentes</h4>
+            <p class="text-muted">Seleccione las fechas y parámetros deseados, luego haga clic en "Generar" para ver el análisis de fidelidad.</p>
+            <button class="btn btn-primary btn-lg" @onclick="GenerarReporte" disabled="@(!EsFechaValida)">
+                <i class="bi bi-play-fill me-2"></i>Generar Reporte
+            </button>
+        </div>
+    }
+</div>
+
+<style>
+    .clientes-frecuentes-container {
+        padding: 1rem;
+    }
+
+    .page-header {
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        padding: 1.5rem;
+        border-radius: 0.5rem;
+        border-left: 4px solid var(--bs-warning);
+    }
+
+    .metric-card {
+        transition: transform 0.2s ease-in-out;
+    }
+
+    .metric-card:hover {
+        transform: translateY(-2px);
+    }
+
+    .metric-icon {
+        width: 50px;
+        height: 50px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.25rem;
+    }
+
+    .metric-number {
+        font-size: 1.75rem;
+        font-weight: 700;
+        margin-bottom: 0.25rem;
+    }
+
+    .rank-badge {
+        width: 35px;
+        height: 35px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+        font-size: 0.875rem;
+    }
+
+    .rank-gold {
+        background: linear-gradient(135deg, #ffd700, #ffed4e);
+        color: #8b5a00;
+    }
+
+    .rank-silver {
+        background: linear-gradient(135deg, #c0c0c0, #e8e8e8);
+        color: #555;
+    }
+
+    .rank-bronze {
+        background: linear-gradient(135deg, #cd7f32, #daa569);
+        color: #4a3c1d;
+    }
+
+    .rank-default {
+        background-color: var(--bs-primary);
+        color: white;
+    }
+
+    .client-avatar {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background-color: var(--bs-light);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.25rem;
+    }
+
+    .fidelity-indicator .badge {
+        font-size: 0.75rem;
+        padding: 0.375rem 0.75rem;
+    }
+
+    .fidelity-platinum {
+        background: linear-gradient(135deg, #e5e4e2, #ffffff);
+        color: #333;
+    }
+
+    .fidelity-gold {
+        background: linear-gradient(135deg, #ffd700, #ffed4e);
+        color: #8b5a00;
+    }
+
+    .fidelity-silver {
+        background: linear-gradient(135deg, #c0c0c0, #e8e8e8);
+        color: #555;
+    }
+
+    .fidelity-bronze {
+        background: linear-gradient(135deg, #cd7f32, #daa569);
+        color: #4a3c1d;
+    }
+
+    .color-indicator {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+    }
+
+    .bg-platinum {
+        background: linear-gradient(135deg, #e5e4e2, #ffffff);
+    }
+
+    .bg-bronze {
+        background: linear-gradient(135deg, #cd7f32, #daa569);
+    }
+
+    .segment-item,
+    .stat-item {
+        margin-bottom: 1rem;
+        padding: 0.75rem;
+        background-color: var(--bs-light);
+        border-radius: 0.5rem;
+    }
+
+    .stat-label {
+        font-size: 0.875rem;
+        color: var(--bs-secondary);
+        margin-bottom: 0.25rem;
+    }
+
+    .stat-value {
+        font-size: 1.125rem;
+        font-weight: 700;
+    }
+
+    .insights-list .insight-item,
+    .recommendations-list .recommendation-item {
+        display: flex;
+        align-items-center;
+        margin-bottom: 1rem;
+        padding: 0.75rem;
+        background-color: var(--bs-light);
+        border-radius: 0.5rem;
+    }
+
+    .info-item {
+        padding: 1rem;
+        border: 1px solid var(--bs-border-color);
+        border-radius: 0.5rem;
+        background: var(--bs-light);
+    }
+
+    .info-label {
+        font-size: 0.875rem;
+        color: var(--bs-secondary);
+        margin-bottom: 0.5rem;
+    }
+
+    .info-value {
+        font-size: 1.25rem;
+        font-weight: 700;
+        color: var(--bs-primary);
+    }
+
+    .card {
+        border: none;
+        box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    }
+
+    .card-header {
+        background-color: var(--bs-light);
+        border-bottom: 1px solid var(--bs-border-color);
+    }
+
+    .table-hover tbody tr:hover {
+        background-color: rgba(var(--bs-primary-rgb), 0.05);
+    }
+
+    .row-vip {
+        background: linear-gradient(135deg, rgba(255, 215, 0, 0.1), rgba(255, 237, 78, 0.1));
+    }
+
+    @@media (max-width: 768px) {
+        .page-header {
+            padding: 1rem;
+        }
+
+        .metric-number {
+            font-size: 1.5rem;
+        }
+
+        .rank-badge {
+            width: 30px;
+            height: 30px;
+            font-size: 0.75rem;
+        }
+
+        .client-avatar {
+            width: 30px;
+            height: 30px;
+        }
+    }
+</style>
+
+@code {
+    private Alert? AlertComponent;
+
+    private bool IsLoading = false;
+    private bool ReporteGenerado = false;
+    private DateTime FechaInicio = DateTime.Now.StartOfMonth();
+    private DateTime FechaFin = DateTime.Now;
+    private int TopClientes = 20;
+    private string CriterioOrden = "monto";
+
+   private List<ClienteFrecuenteDto>? _clientesFrecuentes;
+
+    private bool HasFechaError => !EsFechaValida;
+    private string FechaErrorMessage = "";
+    private bool EsFechaValida => FechaInicio <= FechaFin && FechaInicio <= DateTime.Now && FechaFin <= DateTime.Now;
+
+    private int TotalClientesAnalisis => _clientesFrecuentes?.Count ?? 0;
+    private int TotalFacturasClientes => _clientesFrecuentes?.Sum(c => c.TotalFacturas) ?? 0;
+    private decimal TotalMontoClientes => _clientesFrecuentes?.Sum(c => c.MontoTotalCompras) ?? 0;
+    private decimal PromedioCompraPorCliente => TotalClientesAnalisis > 0 ? TotalMontoClientes / TotalClientesAnalisis : 0;
+    private int ClientesActivosRecientes => _clientesFrecuentes?.Count(c => c.UltimaCompra.HasValue && c.UltimaCompra.Value > DateTime.Now.AddDays(-30)) ?? 0;
+    private double FrecuenciaPromedioCompra => TotalClientesAnalisis > 0 && TotalFacturasClientes > 0 ? CalcularDiasReporte() / (double)TotalFacturasClientes : 0;
+    private decimal TicketPromedioMasAlto => _clientesFrecuentes?.Max(c => CalcularPromedioCompra(c)) ?? 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var uri = new Uri(Navigation.Uri);
+        var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
+        var autoGenerar = query["auto"] == "true";
+
+        if (autoGenerar)
+        {
+            await GenerarReporte();
+        }
+    }
+
+    private async Task GenerarReporte()
+    {
+        if (!EsFechaValida)
+        {
+            ValidarFechas();
+            return;
+        }
+
+        try
+        {
+            IsLoading = true;
+            StateHasChanged();
+
+            var result = await ReporteService.GetClientesFrecuentes(FechaInicio, FechaFin, TopClientes);
+            if (result.Success && result.Data != null)
+            {
+                _clientesFrecuentes = OrdenarClientes(result.Data);
+                ReporteGenerado = true;
+
+                AlertComponent?.Show(
+                    "Reporte generado exitosamente",
+                    AlertType.Success,
+                    "Reporte Completo"
+                );
+            }
+            else
+            {
+                AlertComponent?.Show(
+                    result.Message ?? "Error al generar el reporte",
+                    AlertType.Danger,
+                    "Error"
+                );
+                ReporteGenerado = false;
+            }
+        }
+        catch (Exception ex)
+        {
+            AlertComponent?.Show(
+                $"Error al generar el reporte: {ex.Message}",
+                AlertType.Danger,
+                "Error"
+            );
+            ReporteGenerado = false;
+        }
+        finally
+        {
+            IsLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private List<ClienteFrecuenteDto> OrdenarClientes(List<ClienteFrecuenteDto> clientes)
+    {
+        return CriterioOrden switch
+        {
+            "monto" => clientes.OrderByDescending(c => c.MontoTotalCompras).ToList(),
+            "facturas" => clientes.OrderByDescending(c => c.TotalFacturas).ToList(),
+            "reciente" => clientes.OrderByDescending(c => c.UltimaCompra ?? DateTime.MinValue).ToList(),
+            "promedio" => clientes.OrderByDescending(c => CalcularPromedioCompra(c)).ToList(),
+            _ => clientes.OrderByDescending(c => c.MontoTotalCompras).ToList()
+        };
+    }
+
+    private void ValidarFechas()
+    {
+        if (FechaInicio > FechaFin)
+        {
+            FechaErrorMessage = "La fecha de inicio no puede ser mayor a la fecha de fin";
+        }
+        else if (FechaInicio > DateTime.Now)
+        {
+            FechaErrorMessage = "La fecha de inicio no puede ser futura";
+        }
+        else if (FechaFin > DateTime.Now)
+        {
+            FechaErrorMessage = "La fecha de fin no puede ser futura";
+        }
+        else
+        {
+            FechaErrorMessage = "";
+        }
+    }
+
+    private async Task SetHoy()
+    {
+        FechaInicio = DateTime.Today;
+        FechaFin = DateTime.Today;
+        await GenerarReporte();
+    }
+
+    private async Task SetAyer()
+    {
+        var ayer = DateTime.Today.AddDays(-1);
+        FechaInicio = ayer;
+        FechaFin = ayer;
+        await GenerarReporte();
+    }
+
+    private async Task SetEstaSemana()
+    {
+        var hoy = DateTime.Today;
+        FechaInicio = hoy.AddDays(-(int)hoy.DayOfWeek);
+        FechaFin = hoy;
+        await GenerarReporte();
+    }
+
+    private async Task SetEsteMes()
+    {
+        FechaInicio = DateTime.Now.StartOfMonth();
+        FechaFin = DateTime.Today;
+        await GenerarReporte();
+    }
+
+    private async Task SetMesAnterior()
+    {
+        var mesAnterior = DateTime.Now.AddMonths(-1);
+        FechaInicio = mesAnterior.StartOfMonth();
+        FechaFin = mesAnterior.EndOfMonth().Date;
+        await GenerarReporte();
+    }
+
+    private async Task SetEsteAño()
+    {
+        FechaInicio = DateTime.Now.StartOfYear();
+        FechaFin = DateTime.Today;
+        await GenerarReporte();
+    }
+
+    private int CalcularDiasReporte()
+    {
+        return (FechaFin - FechaInicio).Days + 1;
+    }
+
+    private decimal CalcularPromedioCompra(ClienteFrecuenteDto cliente)
+    {
+        return cliente.TotalFacturas > 0 ? cliente.MontoTotalCompras / cliente.TotalFacturas : 0;
+    }
+
+    private int CalcularDiasUltimaCompra(DateTime ultimaCompra)
+    {
+        return (DateTime.Now - ultimaCompra).Days;
+    }
+
+    private string CalcularNivelFidelidad(ClienteFrecuenteDto cliente)
+    {
+        var promedio = CalcularPromedioCompra(cliente);
+        var facturas = cliente.TotalFacturas;
+
+        if (facturas >= 20 && promedio >= 1000000)
+            return "Platino";
+        else if (facturas >= 10 && promedio >= 500000)
+            return "Oro";
+        else if (facturas >= 5 && promedio >= 200000)
+            return "Plata";
+        else
+            return "Bronce";
+    }
+
+    private string GetRowClass(int index)
+    {
+        return index <= 5 ? "row-vip" : "";
+    }
+
+    private string GetRankBadgeClass(int index)
+    {
+        return index switch
+        {
+            1 => "rank-badge rank-gold",
+            2 => "rank-badge rank-silver", 
+            3 => "rank-badge rank-bronze",
+            _ => "rank-badge rank-default"
+        };
+    }
+
+    private string GetRankIcon(int index)
+    {
+        return index switch
+        {
+            1 => "bi-trophy-fill",
+            2 => "bi-award-fill",
+            3 => "bi-star-fill",
+            _ => ""
+        };
+    }
+
+    private string GetFidelityBadgeClass(string nivel)
+    {
+        return nivel switch
+        {
+            "Platino" => "fidelity-platinum",
+            "Oro" => "fidelity-gold",
+            "Plata" => "fidelity-silver",
+            "Bronce" => "fidelity-bronze",
+            _ => "bg-secondary"
+        };
+    }
+
+    private string GetFidelityText(string nivel)
+    {
+        return nivel switch
+        {
+            "Platino" => "VIP",
+            "Oro" => "Premium",
+            "Plata" => "Frecuente",
+            "Bronce" => "Regular",
+            _ => "Nuevo"
+        };
+    }
+
+    private string GetCriterioTexto()
+    {
+        return CriterioOrden switch
+        {
+            "monto" => "Monto Total",
+            "facturas" => "Número Facturas",
+            "reciente" => "Última Compra",
+            "promedio" => "Compra Promedio",
+            _ => "Monto Total"
+        };
+    }
+
+    private void VerDetalleCliente(int clienteId)
+    {
+        Navigation.NavigateTo($"/clientes/{clienteId}");
+    }
+
+    private void VerFacturasCliente(int clienteId)
+    {
+        Navigation.NavigateTo($"/facturas?clienteId={clienteId}");
+    }
+
+    private async Task ExportarReporte()
+    {
+        AlertComponent?.Show("Función de exportación próximamente disponible", AlertType.Info);
+        await Task.CompletedTask;
+    }
+
+    private async Task VerDetalleCompleto()
+    {
+        AlertComponent?.Show("Función de detalle completo próximamente disponible", AlertType.Info);
+        await Task.CompletedTask;
+    }
+
+    private async Task AnalisisSegmentacion()
+    {
+        AlertComponent?.Show("Función de análisis de segmentación próximamente disponible", AlertType.Info);
+        await Task.CompletedTask;
+    }
+}

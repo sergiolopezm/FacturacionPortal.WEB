@@ -8,6 +8,7 @@
 @inject IAuthService AuthService
 @inject NavigationManager Navigation
 @inject IJSRuntime JSRuntime
+@inject IConfiguration Configuration
 
 <PageTitle>Iniciar Sesión - FacturacionPortal</PageTitle>
 
@@ -29,7 +30,7 @@
 
                 <div class="form-floating mb-3">
                     <InputText @bind-Value="LoginModel.NombreUsuario"
-                               class="form-control @(GetFieldCssClass(nameof(LoginModel.NombreUsuario)))"
+                               class=@($"form-control {GetFieldCssClass(nameof(LoginModel.NombreUsuario))}")
                                id="nombreUsuario"
                                placeholder="Usuario"
                                disabled="@IsLoading"
@@ -43,7 +44,7 @@
                 <div class="form-floating mb-4">
                     <InputText @bind-Value="LoginModel.Contraseña"
                                type="@(ShowPassword ? "text" : "password")"
-                               class="form-control @(GetFieldCssClass(nameof(LoginModel.Contraseña)))"
+                               class=@($"form-control {GetFieldCssClass(nameof(LoginModel.Contraseña))}")
                                id="contraseña"
                                placeholder="Contraseña"
                                disabled="@IsLoading"
@@ -434,6 +435,22 @@
             IsLoading = true;
             StateHasChanged();
 
+            // Verificar conectividad primero
+            var isConnected = await CheckApiConnectivity();
+            if (!isConnected)
+            {
+                AlertComponent?.Show(
+                    "No se puede conectar con el servidor. Por favor, verifica tu conexión a internet o que el servidor esté disponible.",
+                    AlertType.Danger,
+                    "Error de Conexión"
+                );
+                
+                LoginModel.Contraseña = "";
+                IsLoading = false;
+                StateHasChanged();
+                return;
+            }
+
             var result = await AuthService.Login(LoginModel);
 
             if (result.Success && result.Data != null)
@@ -491,6 +508,24 @@
         {
             IsLoading = false;
             StateHasChanged();
+        }
+    }
+
+    private async Task<bool> CheckApiConnectivity()
+    {
+        try
+        {
+            // Usa Configuration directamente en lugar de builder.Configuration
+            await JSRuntime.InvokeVoidAsync(
+                "fetch",
+                $"{Configuration["ApiSettings:BaseUrl"]}api/ping",
+                new { method = "GET", mode = "cors", cache = "no-cache" }
+            );
+            return true;
+        }
+        catch
+        {
+            return false;
         }
     }
 

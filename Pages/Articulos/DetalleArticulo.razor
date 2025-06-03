@@ -1,0 +1,743 @@
+﻿@page "/articulos/{Id:int}"
+@using FacturacionPortal.WEB.Models.Facturacion
+@using FacturacionPortal.WEB.Services.Interface
+@using FacturacionPortal.WEB.Shared.Components
+@using FacturacionPortal.WEB.Components.Shared
+@using FacturacionPortal.WEB.Helpers
+@using FacturacionPortal.WEB.Util
+@using FacturacionPortal.WEB.Util.Extensions
+@using Microsoft.AspNetCore.Components.Authorization
+@inject IArticuloService ArticuloService
+@inject ICategoriaArticuloService CategoriaService
+@inject IReporteService ReporteService
+@inject NavigationManager Navigation
+@inject IJSRuntime JSRuntime
+
+<PageTitle>@(Articulo?.Nombre ?? "Artículo") - FacturacionPortal</PageTitle>
+
+<div class="detalle-articulo-container">
+    <!-- Header -->
+    <div class="page-header mb-4">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h2 class="mb-1">
+                    <i class="bi bi-box-seam text-primary me-2"></i>
+                    Detalle del Artículo
+                </h2>
+                <p class="text-muted mb-0">Información completa y estadísticas del artículo</p>
+            </div>
+            <div class="d-flex gap-2">
+                <button class="btn btn-outline-secondary" @onclick="GoBack">
+                    <i class="bi bi-arrow-left me-1"></i>Volver
+                </button>
+                @if (Articulo != null)
+                {
+                    <button class="btn btn-primary" @onclick="EditarArticulo">
+                        <i class="bi bi-pencil me-1"></i>Editar
+                    </button>
+                    <div class="dropdown">
+                        <button class="btn btn-outline-primary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                            <i class="bi bi-three-dots me-1"></i>Más
+                        </button>
+                        <ul class="dropdown-menu">
+                            <li><button class="dropdown-item" @onclick="ActualizarStock"><i class="bi bi-arrow-repeat me-2"></i>Actualizar Stock</button></li>
+                            <li><button class="dropdown-item" @onclick="VerHistorialVentas"><i class="bi bi-graph-up me-2"></i>Historial de Ventas</button></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><button class="dropdown-item text-danger" @onclick="ConfirmarEliminacion"><i class="bi bi-trash me-2"></i>Eliminar</button></li>
+                        </ul>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+
+    <Alert @ref="AlertComponent" />
+
+    @if (IsLoading)
+    {
+        <Loading IsVisible="true" Text="Cargando información del artículo..." />
+    }
+    else if (Articulo == null)
+    {
+        <div class="text-center py-5">
+            <i class="bi bi-exclamation-triangle display-1 text-warning"></i>
+            <h3 class="mt-3">Artículo no encontrado</h3>
+            <p class="text-muted">El artículo solicitado no existe o ha sido eliminado</p>
+            <button class="btn btn-primary" @onclick='() => Navigation.NavigateTo("/articulos")'>
+                <i class="bi bi-arrow-left me-1"></i>Volver a Artículos
+            </button>
+        </div>
+    }
+    else
+    {
+        <div class="row g-4">
+            <!-- Columna Principal -->
+            <div class="col-lg-8">
+                <!-- Información Principal -->
+                <div class="card shadow-sm mb-4">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="card-title mb-0">
+                            <i class="bi bi-info-circle me-2"></i>Información General
+                        </h5>
+                        <StatusBadge Status="@(Articulo.Activo ? "activo" : "inactivo")" />
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="info-group">
+                                    <label class="info-label">Código</label>
+                                    <div class="info-value">
+                                        <span class="badge bg-primary fs-6">@Articulo.Codigo</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="info-group">
+                                    <label class="info-label">Categoría</label>
+                                    <div class="info-value">
+                                        @if (!string.IsNullOrEmpty(Articulo.Categoria))
+                                        {
+                                            <span class="badge bg-secondary">@Articulo.Categoria</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">Sin categoría</span>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="info-group">
+                            <label class="info-label">Nombre</label>
+                            <div class="info-value">
+                                <h4 class="mb-0">@Articulo.Nombre</h4>
+                            </div>
+                        </div>
+
+                        @if (!string.IsNullOrEmpty(Articulo.Descripcion))
+                        {
+                            <div class="info-group">
+                                <label class="info-label">Descripción</label>
+                                <div class="info-value">
+                                    @Articulo.Descripcion
+                                </div>
+                            </div>
+                        }
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="info-group">
+                                    <label class="info-label">Precio Unitario</label>
+                                    <div class="info-value">
+                                        <h5 class="text-success mb-0">
+                                            <CurrencyDisplay Value="@Articulo.PrecioUnitario" ShowSymbol="true" />
+                                        </h5>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="info-group">
+                                    <label class="info-label">Estado del Stock</label>
+                                    <div class="info-value">
+                                        <span class="badge @GetStockBadgeClass() fs-6">
+                                            @Articulo.Stock unidades
+                                        </span>
+                                        @if (Articulo.StockBajo)
+                                        {
+                                            <i class="bi bi-exclamation-triangle text-warning ms-2" title="Stock bajo"></i>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="info-group">
+                                    <label class="info-label">Stock Mínimo</label>
+                                    <div class="info-value">@Articulo.StockMinimo unidades</div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="info-group">
+                                    <label class="info-label">Disponibilidad</label>
+                                    <div class="info-value">
+                                        @if (Articulo.TieneStock)
+                                        {
+                                            <span class="text-success"><i class="bi bi-check-circle me-1"></i>Disponible</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-danger"><i class="bi bi-x-circle me-1"></i>Sin stock</span>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Estadísticas de Ventas -->
+                <div class="card shadow-sm mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">
+                            <i class="bi bi-graph-up me-2"></i>Estadísticas de Ventas
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        @if (IsLoadingStats)
+                        {
+                            <div class="text-center py-3">
+                                <div class="spinner-border spinner-border-sm me-2"></div>
+                                <span>Cargando estadísticas...</span>
+                            </div>
+                        }
+                        else if (VentasArticulo?.Any() == true)
+                        {
+                            <div class="row g-3">
+                                <div class="col-md-4">
+                                    <div class="stat-card">
+                                        <div class="stat-icon bg-primary">
+                                            <i class="bi bi-cart-check"></i>
+                                        </div>
+                                        <div class="stat-content">
+                                            <div class="stat-number">@TotalVendido</div>
+                                            <div class="stat-label">Unidades Vendidas</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="stat-card">
+                                        <div class="stat-icon bg-success">
+                                            <i class="bi bi-currency-dollar"></i>
+                                        </div>
+                                        <div class="stat-content">
+                                            <div class="stat-number">@CurrencyHelper.FormatCurrency(MontoTotalVentas)</div>
+                                            <div class="stat-label">Monto Total</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="stat-card">
+                                        <div class="stat-icon bg-info">
+                                            <i class="bi bi-receipt"></i>
+                                        </div>
+                                        <div class="stat-content">
+                                            <div class="stat-number">@TotalFacturas</div>
+                                            <div class="stat-label">Facturas</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <hr />
+
+                            <h6 class="mb-3">Ventas Recientes</h6>
+                            <div class="table-responsive">
+                                <table class="table table-sm">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Fecha</th>
+                                            <th>Factura</th>
+                                            <th class="text-center">Cantidad</th>
+                                            <th class="text-end">Precio Unit.</th>
+                                            <th class="text-end">Subtotal</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var venta in VentasArticulo.Take(5))
+                                        {
+                                            <tr>
+                                                <td>@venta.FechaFactura?.ToColombiaShortDateString()</td>
+                                                <td>
+                                                    <a href="/facturas/@venta.FacturaId" class="text-decoration-none">
+                                                        @venta.NumeroFactura
+                                                    </a>
+                                                </td>
+                                                <td class="text-center">
+                                                    <span class="badge bg-primary">@venta.Cantidad</span>
+                                                </td>
+                                                <td class="text-end">
+                                                    <CurrencyDisplay Value="@venta.PrecioUnitario" ShowSymbol="true" />
+                                                </td>
+                                                <td class="text-end">
+                                                    <CurrencyDisplay Value="@venta.Subtotal" ShowSymbol="true" />
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            @if (VentasArticulo.Count > 5)
+                            {
+                                <div class="text-center mt-3">
+                                    <button class="btn btn-outline-primary btn-sm" @onclick="VerHistorialCompleto">
+                                        Ver historial completo (@VentasArticulo.Count registros)
+                                    </button>
+                                </div>
+                            }
+                        }
+                        else
+                        {
+                            <div class="text-center py-4">
+                                <i class="bi bi-graph-up display-4 text-muted"></i>
+                                <div class="mt-2 text-muted">Este artículo aún no se ha vendido</div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <!-- Columna Lateral -->
+            <div class="col-lg-4">
+                <!-- Acciones Rápidas -->
+                <div class="card shadow-sm mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">
+                            <i class="bi bi-lightning me-2"></i>Acciones Rápidas
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="d-grid gap-2">
+                            <button class="btn btn-primary" @onclick="EditarArticulo">
+                                <i class="bi bi-pencil me-2"></i>Editar Artículo
+                            </button>
+                            <button class="btn btn-outline-info" @onclick="ActualizarStock">
+                                <i class="bi bi-arrow-repeat me-2"></i>Actualizar Stock
+                            </button>
+                            <button class="btn btn-outline-success" @onclick="CrearFacturaConArticulo">
+                                <i class="bi bi-plus-circle me-2"></i>Crear Factura
+                            </button>
+                            <button class="btn btn-outline-warning" @onclick="GenerarReporte">
+                                <i class="bi bi-file-text me-2"></i>Generar Reporte
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Información Técnica -->
+                <div class="card shadow-sm mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">
+                            <i class="bi bi-gear me-2"></i>Información del Sistema
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="system-info">
+                            <div class="info-item">
+                                <small class="text-muted">ID del Sistema</small>
+                                <div class="fw-bold">#@Articulo.Id</div>
+                            </div>
+
+                            <div class="info-item">
+                                <small class="text-muted">Fecha de Creación</small>
+                                <div class="fw-bold">@Articulo.FechaCreacion.ToColombiaShortDateString()</div>
+                                <small class="text-muted">@Articulo.FechaCreacion.ToTimeString()</small>
+                            </div>
+
+                            @if (Articulo.FechaModificacion.HasValue)
+                            {
+                                <div class="info-item">
+                                    <small class="text-muted">Última Modificación</small>
+                                    <div class="fw-bold">@Articulo.FechaModificacion.Value.ToColombiaShortDateString()</div>
+                                    <small class="text-muted">@Articulo.FechaModificacion.Value.ToTimeString()</small>
+                                </div>
+                            }
+
+                            @if (!string.IsNullOrEmpty(Articulo.CreadoPor))
+                            {
+                                <div class="info-item">
+                                    <small class="text-muted">Creado por</small>
+                                    <div class="fw-bold">@Articulo.CreadoPor</div>
+                                </div>
+                            }
+
+                            @if (!string.IsNullOrEmpty(Articulo.ModificadoPor))
+                            {
+                                <div class="info-item">
+                                    <small class="text-muted">Modificado por</small>
+                                    <div class="fw-bold">@Articulo.ModificadoPor</div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Alertas -->
+                @if (Articulo.StockBajo || !Articulo.TieneStock)
+                {
+                    <div class="card shadow-sm">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0">
+                                <i class="bi bi-exclamation-triangle me-2"></i>Alertas
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            @if (!Articulo.TieneStock)
+                            {
+                                <div class="alert alert-danger d-flex align-items-center mb-2">
+                                    <i class="bi bi-x-circle-fill me-2"></i>
+                                    <div>
+                                        <strong>Sin stock</strong><br />
+                                        <small>El artículo no está disponible para la venta</small>
+                                    </div>
+                                </div>
+                            }
+                            else if (Articulo.StockBajo)
+                            {
+                                <div class="alert alert-warning d-flex align-items-center mb-2">
+                                    <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                                    <div>
+                                        <strong>Stock bajo</strong><br />
+                                        <small>Quedan @Articulo.Stock unidades (mínimo: @Articulo.StockMinimo)</small>
+                                    </div>
+                                </div>
+                            }
+
+                            @if (!Articulo.Activo)
+                            {
+                                <div class="alert alert-secondary d-flex align-items-center">
+                                    <i class="bi bi-pause-circle-fill me-2"></i>
+                                    <div>
+                                        <strong>Artículo inactivo</strong><br />
+                                        <small>No aparece en las facturas</small>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+
+    <!-- Modales -->
+    <Confirm @ref="ConfirmDialog" />
+</div>
+
+<style>
+    .detalle-articulo-container {
+        padding: 1rem;
+    }
+
+    .page-header {
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        padding: 1.5rem;
+        border-radius: 0.5rem;
+        border-left: 4px solid var(--bs-primary);
+    }
+
+    .card {
+        border: none;
+        box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    }
+
+    .card-header {
+        background-color: var(--bs-light);
+        border-bottom: 1px solid var(--bs-border-color);
+    }
+
+    .info-group {
+        margin-bottom: 1.5rem;
+    }
+
+    .info-label {
+        display: block;
+        font-size: 0.875rem;
+        color: var(--bs-secondary);
+        margin-bottom: 0.25rem;
+        font-weight: 500;
+    }
+
+    .info-value {
+        font-size: 1rem;
+        color: var(--bs-dark);
+    }
+
+    .stat-card {
+        display: flex;
+        align-items: center;
+        padding: 1rem;
+        background: var(--bs-light);
+        border-radius: 0.5rem;
+        border: 1px solid var(--bs-border-color);
+    }
+
+    .stat-icon {
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        margin-right: 1rem;
+        font-size: 1.25rem;
+    }
+
+    .stat-content {
+        flex: 1;
+    }
+
+    .stat-number {
+        font-size: 1.5rem;
+        font-weight: 700;
+        line-height: 1.2;
+    }
+
+    .stat-label {
+        font-size: 0.875rem;
+        color: var(--bs-secondary);
+    }
+
+    .system-info {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+    }
+
+    .info-item {
+        padding-bottom: 0.75rem;
+        border-bottom: 1px solid var(--bs-border-color);
+    }
+
+    .info-item:last-child {
+        border-bottom: none;
+        padding-bottom: 0;
+    }
+
+    @@media (max-width: 768px) {
+        .page-header {
+            padding: 1rem;
+        }
+
+        .stat-card {
+            flex-direction: column;
+            text-align: center;
+        }
+
+        .stat-icon {
+            margin-right: 0;
+            margin-bottom: 0.5rem;
+        }
+    }
+</style>
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private ArticuloDto? Articulo;
+    private List<FacturaDetalleDto>? VentasArticulo;
+    private Alert? AlertComponent;
+    private Confirm? ConfirmDialog;
+
+    private bool IsLoading = true;
+    private bool IsLoadingStats = false;
+
+    // Estadísticas calculadas
+    private int TotalVendido = 0;
+    private decimal MontoTotalVentas = 0;
+    private int TotalFacturas = 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadArticulo();
+        if (Articulo != null)
+        {
+            await LoadEstadisticas();
+        }
+    }
+
+    private async Task LoadArticulo()
+    {
+        try
+        {
+            IsLoading = true;
+            StateHasChanged();
+
+            var result = await ArticuloService.GetById(Id);
+            if (result.Success && result.Data != null)
+            {
+                Articulo = result.Data;
+            }
+            else
+            {
+                AlertComponent?.Show(
+                    result.Message ?? "Artículo no encontrado",
+                    AlertType.Danger,
+                    "Error"
+                );
+            }
+        }
+        catch (Exception ex)
+        {
+            AlertComponent?.Show(
+                $"Error al cargar el artículo: {ex.Message}",
+                AlertType.Danger,
+                "Error"
+            );
+        }
+        finally
+        {
+            IsLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadEstadisticas()
+    {
+        try
+        {
+            IsLoadingStats = true;
+            StateHasChanged();
+
+            // Obtener artículos más vendidos para encontrar estadísticas de este artículo
+            var fechaInicio = DateTime.Now.AddMonths(-6);
+            var fechaFin = DateTime.Now;
+            
+            var result = await ReporteService.GetArticulosMasVendidos(fechaInicio, fechaFin, 100);
+            if (result.Success && result.Data != null)
+            {
+                var estadistica = result.Data.FirstOrDefault(a => a.ArticuloId == Id);
+                if (estadistica != null)
+                {
+                    TotalVendido = estadistica.CantidadVendida;
+                    MontoTotalVentas = estadistica.MontoVendido;
+                    TotalFacturas = estadistica.VecesVendido;
+                }
+            }
+
+            // Simular detalles de ventas (en una implementación real, tendrías un endpoint específico)
+            VentasArticulo = new List<FacturaDetalleDto>();
+        }
+        catch (Exception)
+        {
+            // Manejo silencioso de errores
+            VentasArticulo = new List<FacturaDetalleDto>();
+        }
+        finally
+        {
+            IsLoadingStats = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task GoBack()
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("history.back");
+        }
+        catch
+        {
+            Navigation.NavigateTo("/articulos");
+        }
+    }
+
+    private void EditarArticulo()
+    {
+        Navigation.NavigateTo($"/articulos/editar/{Id}");
+    }
+
+    private async Task ActualizarStock()
+    {
+        if (ConfirmDialog != null && Articulo != null)
+        {
+            var confirmed = await ConfirmDialog.ShowAsync(
+                "Actualizar Stock",
+                $"Función de actualización de stock para {Articulo.Nombre} próximamente disponible.",
+                ConfirmType.Info
+            );
+        }
+    }
+
+    private void CrearFacturaConArticulo()
+    {
+        Navigation.NavigateTo($"/facturas/crear?articulo={Id}");
+    }
+
+    private void VerHistorialVentas()
+    {
+        Navigation.NavigateTo($"/reportes/articulos-vendidos?articulo={Id}");
+    }
+
+    private void VerHistorialCompleto()
+    {
+        VerHistorialVentas();
+    }
+
+    private async Task GenerarReporte()
+    {
+        AlertComponent?.Show(
+            "Función de generación de reportes próximamente disponible",
+            AlertType.Info,
+            "Próximamente"
+        );
+        await Task.CompletedTask;
+    }
+
+    private async Task ConfirmarEliminacion()
+    {
+        if (ConfirmDialog != null && Articulo != null)
+        {
+            var confirmed = await ConfirmDialog.ShowAsync(
+                "Eliminar Artículo",
+                $"¿Está seguro que desea eliminar el artículo '{Articulo.Nombre}'? Esta acción no se puede deshacer.",
+                ConfirmType.Danger
+            );
+
+            if (confirmed)
+            {
+                await EliminarArticulo();
+            }
+        }
+    }
+
+    private async Task EliminarArticulo()
+    {
+        try
+        {
+            if (Articulo == null) return;
+
+            var result = await ArticuloService.Delete(Id);
+            if (result.Success)
+            {
+                AlertComponent?.Show(
+                    "Artículo eliminado exitosamente",
+                    AlertType.Success,
+                    "¡Éxito!"
+                );
+
+                await Task.Delay(1500);
+                Navigation.NavigateTo("/articulos");
+            }
+            else
+            {
+                AlertComponent?.Show(
+                    result.Message ?? "Error al eliminar el artículo",
+                    AlertType.Danger,
+                    "Error"
+                );
+            }
+        }
+        catch (Exception ex)
+        {
+            AlertComponent?.Show(
+                $"Error al eliminar el artículo: {ex.Message}",
+                AlertType.Danger,
+                "Error"
+            );
+        }
+    }
+
+    private string GetStockBadgeClass()
+    {
+        if (Articulo == null) return "bg-secondary";
+        
+        if (Articulo.Stock <= 0) return "bg-danger";
+        if (Articulo.StockBajo) return "bg-warning";
+        return "bg-success";
+    }
+}

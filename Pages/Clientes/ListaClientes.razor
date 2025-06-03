@@ -1,0 +1,674 @@
+﻿@page "/clientes"
+@using FacturacionPortal.WEB.Models.Facturacion
+@using FacturacionPortal.WEB.Models.Common
+@using FacturacionPortal.WEB.Services.Interface
+@using FacturacionPortal.WEB.Shared.Components
+@using FacturacionPortal.WEB.Components.Shared
+@using FacturacionPortal.WEB.Helpers
+@using FacturacionPortal.WEB.Util
+@using FacturacionPortal.WEB.Util.Extensions
+@using Microsoft.AspNetCore.Components.Authorization
+@inject IClienteService ClienteService
+@inject NavigationManager Navigation
+@inject IJSRuntime JSRuntime
+
+<PageTitle>Clientes - FacturacionPortal</PageTitle>
+
+<div class="clientes-container">
+    <!-- Header -->
+    <div class="page-header mb-4">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h2 class="mb-1">
+                    <i class="bi bi-people-fill text-primary me-2"></i>
+                    Gestión de Clientes
+                </h2>
+                <p class="text-muted mb-0">Administre la información de sus clientes</p>
+            </div>
+            <div class="d-flex gap-2">
+                <button class="btn btn-outline-secondary" @onclick="ExportarClientes" disabled="@IsLoading">
+                    <i class="bi bi-download me-1"></i>Exportar
+                </button>
+                <button class="btn btn-primary" @onclick="CrearCliente">
+                    <i class="bi bi-plus me-1"></i>Nuevo Cliente
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <Alert @ref="AlertComponent" />
+
+    <!-- Filtros y Búsqueda -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-header">
+            <h6 class="card-title mb-0">
+                <i class="bi bi-search me-2"></i>Búsqueda y Filtros
+            </h6>
+        </div>
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label class="form-label">Buscar</label>
+                    <div class="input-group">
+                        <span class="input-group-text">
+                            <i class="bi bi-search"></i>
+                        </span>
+                        <input type="text" class="form-control" placeholder="Nombre, documento, teléfono..."
+                               @bind="SearchTerm" @bind:event="oninput" @onkeypress="OnSearchKeyPress" />
+                        @if (!string.IsNullOrEmpty(SearchTerm))
+                        {
+                            <button class="btn btn-outline-secondary" type="button" @onclick="ClearSearch">
+                                <i class="bi bi-x"></i>
+                            </button>
+                        }
+                    </div>
+                </div>
+                
+                <div class="col-md-2">
+                    <label class="form-label">Estado</label>
+                    <select class="form-select" value="@EstadoFiltro" @onchange="OnFiltroChanged">
+                        <option value="">Todos</option>
+                        <option value="true">Activos</option>
+                        <option value="false">Inactivos</option>
+                    </select>
+                </div>
+
+                <div class="col-md-2">
+                    <label class="form-label">Mostrar</label>
+                    <select class="form-select" value="@ElementosPorPagina" @onchange="OnPageSizeChanged">
+                        @foreach (var option in Constants.Paginacion.OpcionesPorPagina)
+                        {
+                            <option value="@option">@option</option>
+                        }
+                    </select>
+                </div>
+
+                <div class="col-md-4">
+                    <label class="form-label">&nbsp;</label>
+                    <div class="d-flex gap-2">
+                        <button class="btn btn-outline-primary" @onclick="BuscarClientes" disabled="@IsLoading">
+                            @if (IsLoading)
+                            {
+                                <span class="spinner-border spinner-border-sm me-1"></span>
+                            }
+                            else
+                            {
+                                <i class="bi bi-search me-1"></i>
+                            }
+                            Buscar
+                        </button>
+                        <button class="btn btn-outline-secondary" @onclick="LimpiarFiltros">
+                            <i class="bi bi-arrow-clockwise me-1"></i>Limpiar
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabla de Clientes -->
+    <div class="card shadow-sm">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h6 class="card-title mb-0">
+                <i class="bi bi-list me-2"></i>Listado de Clientes
+                @if (PaginacionData != null)
+                {
+                    <span class="badge bg-primary ms-2">@PaginacionData.TotalRegistros</span>
+                }
+            </h6>
+            <div class="d-flex gap-2">
+                @if (ClientesSeleccionados.Any())
+                {
+                    <div class="btn-group btn-group-sm">
+                        <button class="btn btn-outline-danger" @onclick="EliminarSeleccionados">
+                            <i class="bi bi-trash me-1"></i>Eliminar (@ClientesSeleccionados.Count)
+                        </button>
+                        <button class="btn btn-outline-secondary" @onclick="ExportarSeleccionados">
+                            <i class="bi bi-download me-1"></i>Exportar
+                        </button>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <div class="card-body p-0">
+            @if (IsLoading)
+            {
+                <Loading IsVisible="true" Text="Cargando clientes..." />
+            }
+            else if (Clientes == null || !Clientes.Any())
+            {
+                <div class="text-center py-5">
+                    <i class="bi bi-people display-1 text-muted"></i>
+                    <h4 class="mt-3">No se encontraron clientes</h4>
+                    <p class="text-muted">
+                        @if (string.IsNullOrEmpty(SearchTerm))
+                        {
+                            <span>No hay clientes registrados en el sistema.</span>
+                        }
+                        else
+                        {
+                            <span>No se encontraron clientes que coincidan con "@SearchTerm"</span>
+                        }
+                    </p>
+                    <button class="btn btn-primary" @onclick="CrearCliente">
+                        <i class="bi bi-plus me-1"></i>Crear Primer Cliente
+                    </button>
+                </div>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-dark">
+                            <tr>
+                                <th style="width: 50px;">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox"
+                                               checked="@SelectAll"
+                                               @onchange="OnSelectAllChanged" />
+                                    </div>
+                                </th>
+                                <th>Cliente</th>
+                                <th>Documento</th>
+                                <th>Contacto</th>
+                                <th class="text-center">Facturas</th>
+                                <th class="text-end">Total Compras</th>
+                                <th class="text-center">Estado</th>
+                                <th class="text-center" style="width: 150px;">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var cliente in Clientes)
+                            {
+                                <tr class="@(ClientesSeleccionados.Contains(cliente.Id) ? "table-active" : "")">
+                                    <td>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox"
+                                                   checked="@ClientesSeleccionados.Contains(cliente.Id)"
+                                                   @onchange="(e) => OnClienteSelectionChanged(cliente.Id, (bool)e.Value!)" />
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div class="d-flex align-items-center">
+                                            <div class="client-avatar me-2">
+                                                <div class="avatar-placeholder rounded-circle d-flex align-items-center justify-content-center">
+                                                    <i class="bi bi-person-fill"></i>
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <div class="fw-bold">@cliente.NombreCompleto</div>
+                                                <small class="text-muted">@cliente.Direccion</small>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-light text-dark">@cliente.NumeroDocumento</span>
+                                    </td>
+                                    <td>
+                                        <div>
+                                            <div class="d-flex align-items-center mb-1">
+                                                <i class="bi bi-telephone me-1 text-muted"></i>
+                                                <span>@cliente.Telefono</span>
+                                            </div>
+                                            @if (!string.IsNullOrEmpty(cliente.Email))
+                                            {
+                                                <div class="d-flex align-items-center">
+                                                    <i class="bi bi-envelope me-1 text-muted"></i>
+                                                    <small class="text-muted">@cliente.Email</small>
+                                                </div>
+                                            }
+                                        </div>
+                                    </td>
+                                    <td class="text-center">
+                                        <span class="badge bg-info">@cliente.TotalFacturas</span>
+                                    </td>
+                                    <td class="text-end">
+                                        <CurrencyDisplay Value="@cliente.MontoTotalCompras" ShowSymbol="true" />
+                                    </td>
+                                    <td class="text-center">
+                                        <StatusBadge Status="@(cliente.Activo ? "Activo" : "Inactivo")" />
+                                    </td>
+                                    <td class="text-center">
+                                        <div class="btn-group btn-group-sm" role="group">
+                                            <button class="btn btn-outline-primary" 
+                                                    @onclick="() => VerCliente(cliente.Id)"
+                                                    title="Ver detalle">
+                                                <i class="bi bi-eye"></i>
+                                            </button>
+                                            <button class="btn btn-outline-success" 
+                                                    @onclick="() => EditarCliente(cliente.Id)"
+                                                    title="Editar">
+                                                <i class="bi bi-pencil"></i>
+                                            </button>
+                                            <button class="btn btn-outline-info" 
+                                                    @onclick="() => CrearFacturaCliente(cliente.Id)"
+                                                    title="Nueva factura">
+                                                <i class="bi bi-receipt"></i>
+                                            </button>
+                                            <button class="btn btn-outline-danger" 
+                                                    @onclick="() => EliminarCliente(cliente.Id)"
+                                                    title="Eliminar">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+
+                @if (PaginacionData != null && PaginacionData.TotalPaginas > 1)
+                {
+                    <div class="card-footer">
+                        <Pagination TItem="ClienteDto" 
+                                    PaginationInfo="PaginacionData"
+                                    OnPageChanged="OnPageChanged"
+                                    OOnPageSizeChanged="@(new EventCallback<ChangeEventArgs>(this, OnPageSizeChanged))"
+                                    CurrentPageSize="ElementosPorPagina"
+                                    ShowInfo="true"
+                                    ShowPageSizeSelector="false" />
+                    </div>
+                }
+            }
+        </div>
+    </div>
+
+    <!-- Estadísticas rápidas -->
+    @if (Clientes?.Any() == true)
+    {
+        <div class="row g-3 mt-4">
+            <div class="col-md-3">
+                <div class="card text-center border-0 bg-light">
+                    <div class="card-body">
+                        <h4 class="text-primary">@PaginacionData?.TotalRegistros</h4>
+                        <small class="text-muted">Total Clientes</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-center border-0 bg-light">
+                    <div class="card-body">
+                        <h4 class="text-success">@Clientes.Count(c => c.Activo)</h4>
+                        <small class="text-muted">Activos</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-center border-0 bg-light">
+                    <div class="card-body">
+                        <h4 class="text-info">@Clientes.Sum(c => c.TotalFacturas)</h4>
+                        <small class="text-muted">Total Facturas</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-center border-0 bg-light">
+                    <div class="card-body">
+                        <h4 class="text-warning">@CurrencyHelper.FormatCurrency(Clientes.Sum(c => c.MontoTotalCompras))</h4>
+                        <small class="text-muted">Total Ventas</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<Confirm @ref="ConfirmDialog" />
+
+<style>
+    .clientes-container {
+        padding: 1rem;
+    }
+
+    .page-header {
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        padding: 1.5rem;
+        border-radius: 0.5rem;
+        border-left: 4px solid var(--bs-primary);
+    }
+
+    .client-avatar .avatar-placeholder {
+        width: 40px;
+        height: 40px;
+        background-color: var(--bs-secondary);
+        color: white;
+        font-size: 1rem;
+    }
+
+    .card {
+        border: none;
+        box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    }
+
+    .card-header {
+        background-color: var(--bs-light);
+        border-bottom: 1px solid var(--bs-border-color);
+    }
+
+    .table-responsive {
+        max-height: 600px;
+        overflow-y: auto;
+    }
+
+    .btn-group .btn {
+        padding: 0.25rem 0.5rem;
+    }
+
+    @@media (max-width: 768px) {
+        .page-header {
+            padding: 1rem;
+        }
+
+        .btn-group {
+            flex-direction: column;
+        }
+
+        .client-avatar {
+            display: none;
+        }
+    }
+</style>
+
+@code {
+    private Alert? AlertComponent;
+    private Confirm? ConfirmDialog;
+
+    private List<ClienteDto>? Clientes;
+    private PaginacionDto<ClienteDto>? PaginacionData;
+    private List<int> ClientesSeleccionados = new();
+
+    private bool IsLoading = false;
+    private string SearchTerm = "";
+    private string EstadoFiltro = "";
+    private int PaginaActual = 1;
+    private int ElementosPorPagina = Constants.Paginacion.ElementosPorPaginaDefault;
+    private bool SelectAll = false;
+
+    private Timer? _searchTimer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarClientes();
+    }
+
+    private async Task CargarClientes()
+    {
+        try
+        {
+            IsLoading = true;
+            StateHasChanged();
+
+            var activo = string.IsNullOrEmpty(EstadoFiltro) ? (bool?)null : bool.Parse(EstadoFiltro);
+
+            var result = await ClienteService.GetPaginated(
+                PaginaActual, 
+                ElementosPorPagina, 
+                string.IsNullOrEmpty(SearchTerm) ? null : SearchTerm);
+
+            if (result.Success && result.Data != null)
+            {
+                PaginacionData = result.Data;
+                Clientes = result.Data.Lista?.Where(c => activo == null || c.Activo == activo).ToList();
+            }
+            else
+            {
+                AlertComponent?.Show(
+                    result.Message ?? "Error al cargar los clientes",
+                    AlertType.Danger,
+                    "Error"
+                );
+                Clientes = new List<ClienteDto>();
+            }
+        }
+        catch (Exception ex)
+        {
+            AlertComponent?.Show(
+                $"Error al cargar clientes: {ex.Message}",
+                AlertType.Danger,
+                "Error"
+            );
+            Clientes = new List<ClienteDto>();
+        }
+        finally
+        {
+            IsLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task OnSearchKeyPress(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            _searchTimer?.Dispose();
+            await BuscarClientes();
+        }
+        else
+        {
+            SetSearchTimer();
+        }
+    }
+
+    private void SetSearchTimer()
+    {
+        _searchTimer?.Dispose();
+        _searchTimer = new Timer(async _ =>
+        {
+            await InvokeAsync(BuscarClientes);
+        }, null, 500, Timeout.Infinite);
+    }
+
+    private async Task BuscarClientes()
+    {
+        PaginaActual = 1;
+        ClientesSeleccionados.Clear();
+        SelectAll = false;
+        await CargarClientes();
+    }
+
+    private async Task OnFiltroChanged(ChangeEventArgs e)
+    {
+        EstadoFiltro = e.Value?.ToString() ?? "";
+        await BuscarClientes();
+    }
+
+    private async Task OnPageChanged(int page)
+    {
+        PaginaActual = page;
+        await CargarClientes();
+    }
+
+    private async Task OnPageSizeChanged(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out int pageSize))
+        {
+            ElementosPorPagina = pageSize;
+            PaginaActual = 1;
+            await CargarClientes();
+        }
+    }
+
+    private async Task ClearSearch()
+    {
+        SearchTerm = "";
+        await BuscarClientes();
+    }
+
+    private async Task LimpiarFiltros()
+    {
+        SearchTerm = "";
+        EstadoFiltro = "";
+        PaginaActual = 1;
+        ElementosPorPagina = Constants.Paginacion.ElementosPorPaginaDefault;
+        ClientesSeleccionados.Clear();
+        SelectAll = false;
+        await CargarClientes();
+    }
+
+    private void OnClienteSelectionChanged(int clienteId, bool selected)
+    {
+        if (selected)
+        {
+            if (!ClientesSeleccionados.Contains(clienteId))
+                ClientesSeleccionados.Add(clienteId);
+        }
+        else
+        {
+            ClientesSeleccionados.Remove(clienteId);
+        }
+
+        SelectAll = Clientes != null && ClientesSeleccionados.Count == Clientes.Count;
+        StateHasChanged();
+    }
+
+    private void OnSelectAllChanged(ChangeEventArgs e)
+    {
+        var selectAll = (bool)(e.Value ?? false);
+
+        if (selectAll)
+        {
+            ClientesSeleccionados = Clientes?.Select(c => c.Id).ToList() ?? new List<int>();
+        }
+        else
+        {
+            ClientesSeleccionados.Clear();
+        }
+
+        SelectAll = selectAll;
+        StateHasChanged();
+    }
+
+    private void CrearCliente()
+    {
+        Navigation.NavigateTo("/clientes/crear");
+    }
+
+    private void VerCliente(int clienteId)
+    {
+        Navigation.NavigateTo($"/clientes/{clienteId}");
+    }
+
+    private void EditarCliente(int clienteId)
+    {
+        Navigation.NavigateTo($"/clientes/editar/{clienteId}");
+    }
+
+    private void CrearFacturaCliente(int clienteId)
+    {
+        Navigation.NavigateTo($"/facturas/crear?clienteId={clienteId}");
+    }
+
+    private async Task EliminarCliente(int clienteId)
+    {
+        if (ConfirmDialog != null)
+        {
+            var cliente = Clientes?.FirstOrDefault(c => c.Id == clienteId);
+            var confirmed = await ConfirmDialog.ShowAsync(
+                "Eliminar Cliente",
+                $"¿Está seguro que desea eliminar el cliente {cliente?.NombreCompleto}? Esta acción no se puede deshacer.",
+                ConfirmType.Danger
+            );
+
+            if (confirmed)
+            {
+                await ProcesarEliminacion(new List<int> { clienteId });
+            }
+        }
+    }
+
+    private async Task EliminarSeleccionados()
+    {
+        if (!ClientesSeleccionados.Any() || ConfirmDialog == null) return;
+
+        var confirmed = await ConfirmDialog.ShowAsync(
+            "Eliminar Clientes",
+            $"¿Está seguro que desea eliminar {ClientesSeleccionados.Count} cliente(s) seleccionado(s)? Esta acción no se puede deshacer.",
+            ConfirmType.Danger
+        );
+
+        if (confirmed)
+        {
+            await ProcesarEliminacion(ClientesSeleccionados);
+        }
+    }
+
+    private async Task ProcesarEliminacion(List<int> clienteIds)
+    {
+        try
+        {
+            IsLoading = true;
+            StateHasChanged();
+
+            var errores = new List<string>();
+            var eliminados = 0;
+
+            foreach (var clienteId in clienteIds)
+            {
+                var result = await ClienteService.Delete(clienteId);
+                if (result.Success)
+                {
+                    eliminados++;
+                }
+                else
+                {
+                    var cliente = Clientes?.FirstOrDefault(c => c.Id == clienteId);
+                    errores.Add($"{cliente?.NombreCompleto}: {result.Message}");
+                }
+            }
+
+            if (eliminados > 0)
+            {
+                AlertComponent?.Show(
+                    $"Se eliminaron {eliminados} cliente(s) exitosamente.",
+                    AlertType.Success,
+                    "Eliminación Exitosa"
+                );
+
+                ClientesSeleccionados.Clear();
+                SelectAll = false;
+                await CargarClientes();
+            }
+
+            if (errores.Any())
+            {
+                AlertComponent?.Show(
+                    $"Errores al eliminar algunos clientes: {string.Join(", ", errores)}",
+                    AlertType.Warning,
+                    "Eliminación Parcial"
+                );
+            }
+        }
+        catch (Exception ex)
+        {
+            AlertComponent?.Show(
+                $"Error al eliminar clientes: {ex.Message}",
+                AlertType.Danger,
+                "Error"
+            );
+        }
+        finally
+        {
+            IsLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task ExportarClientes()
+    {
+        AlertComponent?.Show("Función de exportación próximamente disponible", AlertType.Info);
+        await Task.CompletedTask;
+    }
+
+    private async Task ExportarSeleccionados()
+    {
+        AlertComponent?.Show("Función de exportación próximamente disponible", AlertType.Info);
+        await Task.CompletedTask;
+    }
+
+    public void Dispose()
+    {
+        _searchTimer?.Dispose();
+    }
+}

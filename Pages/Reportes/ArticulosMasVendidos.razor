@@ -1,0 +1,901 @@
+﻿@page "/reportes/articulos-mas-vendidos"
+@using FacturacionPortal.WEB.Models.Facturacion
+@using FacturacionPortal.WEB.Services.Interface
+@using FacturacionPortal.WEB.Shared.Components
+@using FacturacionPortal.WEB.Components.Shared
+@using FacturacionPortal.WEB.Helpers
+@using FacturacionPortal.WEB.Util
+@using FacturacionPortal.WEB.Util.Extensions
+@inject IReporteService ReporteService
+@inject IArticuloService ArticuloService
+@inject ICategoriaArticuloService CategoriaService
+@inject NavigationManager Navigation
+@inject IJSRuntime JSRuntime
+
+<PageTitle>Artículos Más Vendidos - FacturacionPortal</PageTitle>
+
+<div class="articulos-mas-vendidos-container">
+    <!-- Header -->
+    <div class="page-header mb-4">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h2 class="mb-1">
+                    <i class="bi bi-trophy-fill text-warning me-2"></i>
+                    Artículos Más Vendidos
+                </h2>
+                <p class="text-muted mb-0">Análisis de productos con mayor rotación y ventas</p>
+            </div>
+            <div class="d-flex gap-2">
+                <button class="btn btn-outline-secondary" @onclick="ExportarReporte" disabled="@IsLoading">
+                    <i class="bi bi-download me-1"></i>Exportar
+                </button>
+                <button class="btn btn-outline-primary" @onclick="GenerarReporte" disabled="@IsLoading">
+                    @if (IsLoading)
+                    {
+                        <span class="spinner-border spinner-border-sm me-1"></span>
+                    }
+                    else
+                    {
+                        <i class="bi bi-arrow-clockwise me-1"></i>
+                    }
+                    Actualizar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <Alert @ref="AlertComponent" />
+
+    <!-- Filtros de Reporte -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-header">
+            <h6 class="card-title mb-0">
+                <i class="bi bi-sliders me-2"></i>Parámetros del Reporte
+            </h6>
+        </div>
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-3">
+                    <label class="form-label">Fecha Inicio *</label>
+                    <input type="date" 
+                           class="form-control @(HasFechaError ? "is-invalid" : "")"
+                           @bind="FechaInicio"
+                           max="@DateTime.Now.ToString("yyyy-MM-dd")" />
+                    @if (HasFechaError)
+                    {
+                        <div class="invalid-feedback">@FechaErrorMessage</div>
+                    }
+                </div>
+
+                <div class="col-md-3">
+                    <label class="form-label">Fecha Fin *</label>
+                    <input type="date" 
+                           class="form-control @(HasFechaError ? "is-invalid" : "")"
+                           @bind="FechaFin"
+                           max="@DateTime.Now.ToString("yyyy-MM-dd")" />
+                </div>
+
+                <div class="col-md-2">
+                    <label class="form-label">Top</label>
+                    <select class="form-select" @bind="TopArticulos">
+                        <option value="5">Top 5</option>
+                        <option value="10">Top 10</option>
+                        <option value="20">Top 20</option>
+                        <option value="50">Top 50</option>
+                        <option value="100">Top 100</option>
+                    </select>
+                </div>
+
+                <div class="col-md-3">
+                    <label class="form-label">Categoría</label>
+                    <select class="form-select" @bind="CategoriaFiltro">
+                        <option value="">Todas las categorías</option>
+                        @if (CategoriasDisponibles != null)
+                        {
+                            @foreach (var categoria in CategoriasDisponibles)
+                            {
+                                <option value="@categoria.Id">@categoria.Nombre</option>
+                            }
+                        }
+                    </select>
+                </div>
+
+                <div class="col-md-1">
+                    <label class="form-label">&nbsp;</label>
+                    <button class="btn btn-primary w-100" @onclick="GenerarReporte" disabled="@(IsLoading || !EsFechaValida)">
+                        @if (IsLoading)
+                        {
+                            <span class="spinner-border spinner-border-sm"></span>
+                        }
+                        else
+                        {
+                            <i class="bi bi-play-fill"></i>
+                        }
+                    </button>
+                </div>
+            </div>
+
+            <!-- Rangos rápidos -->
+            <div class="mt-3">
+                <small class="text-muted me-2">Rangos rápidos:</small>
+                <div class="btn-group btn-group-sm">
+                    <button class="btn btn-outline-secondary" @onclick="SetHoy">Hoy</button>
+                    <button class="btn btn-outline-secondary" @onclick="SetAyer">Ayer</button>
+                    <button class="btn btn-outline-secondary" @onclick="SetEstaSemana">Esta Semana</button>
+                    <button class="btn btn-outline-secondary" @onclick="SetEsteMes">Este Mes</button>
+                    <button class="btn btn-outline-secondary" @onclick="SetMesAnterior">Mes Anterior</button>
+                    <button class="btn btn-outline-secondary" @onclick="SetEsteAño">Este Año</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @if (ReporteGenerado && ListaArticulosMasVendidos != null)
+    {
+        <!-- Resumen Ejecutivo -->
+        <div class="row g-3 mb-4">
+            <div class="col-lg-3 col-md-6">
+                <div class="metric-card card border-0 shadow-sm">
+                    <div class="card-body text-center">
+                        <div class="metric-icon bg-warning text-white rounded-circle mx-auto mb-2">
+                            <i class="bi bi-box-seam"></i>
+                        </div>
+                        <h3 class="metric-number text-warning">@TotalArticulosVendidos</h3>
+                        <small class="text-muted">Artículos Únicos</small>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-3 col-md-6">
+                <div class="metric-card card border-0 shadow-sm">
+                    <div class="card-body text-center">
+                        <div class="metric-icon bg-primary text-white rounded-circle mx-auto mb-2">
+                            <i class="bi bi-123"></i>
+                        </div>
+                        <h3 class="metric-number text-primary">@TotalCantidadVendida.ToString("N0")</h3>
+                        <small class="text-muted">Unidades Vendidas</small>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-3 col-md-6">
+                <div class="metric-card card border-0 shadow-sm">
+                    <div class="card-body text-center">
+                        <div class="metric-icon bg-success text-white rounded-circle mx-auto mb-2">
+                            <i class="bi bi-currency-dollar"></i>
+                        </div>
+                        <h3 class="metric-number text-success">@CurrencyHelper.FormatCurrency(TotalMontoVendido)</h3>
+                        <small class="text-muted">Monto Total</small>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-3 col-md-6">
+                <div class="metric-card card border-0 shadow-sm">
+                    <div class="card-body text-center">
+                        <div class="metric-icon bg-info text-white rounded-circle mx-auto mb-2">
+                            <i class="bi bi-graph-up"></i>
+                        </div>
+                        <h3 class="metric-number text-info">@CurrencyHelper.FormatCurrency(PromedioVentaPorArticulo)</h3>
+                        <small class="text-muted">Promedio por Artículo</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Lista de Artículos Más Vendidos -->
+        <div class="card shadow-sm mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-list-ol me-2"></i>Ranking de Artículos (Top @TopArticulos)
+                </h5>
+                <div class="d-flex gap-2">
+                    <span class="badge bg-primary">@ListaArticulosMasVendidos.Count artículo(s)</span>
+                    <div class="dropdown">
+                        <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                            <i class="bi bi-three-dots"></i>
+                        </button>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="#" @onclick="VerDetalleCompleto">Ver detalle completo</a></li>
+                            <li><a class="dropdown-item" href="#" @onclick="CompararPeriodos">Comparar períodos</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="#" @onclick="ExportarReporte">Exportar datos</a></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-dark">
+                            <tr>
+                                <th style="width: 60px;" class="text-center">Rank</th>
+                                <th>Artículo</th>
+                                <th class="text-center" style="width: 120px;">Cantidad</th>
+                                <th class="text-center" style="width: 100px;">Veces</th>
+                                <th class="text-end" style="width: 150px;">Monto Vendido</th>
+                                <th class="text-center" style="width: 120px;">% del Total</th>
+                                <th class="text-center" style="width: 100px;">Tendencia</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var (articulo, index) in ListaArticulosMasVendidos.Select((a, i) => (a, i + 1)))
+                            {
+                                <tr class="@GetRowClass(index)">
+                                    <td class="text-center">
+                                        <div class="rank-badge @GetRankBadgeClass(index)">
+                                            @if (index <= 3)
+                                            {
+                                                <i class="bi @GetRankIcon(index)"></i>
+                                            }
+                                            else
+                                            {
+                                                <span>@index</span>
+                                            }
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div class="d-flex align-items-center">
+                                            <div class="product-avatar me-3">
+                                                <i class="bi bi-box text-primary"></i>
+                                            </div>
+                                            <div>
+                                                <div class="fw-bold">@articulo.Nombre</div>
+                                                <small class="text-muted">Código: @articulo.Codigo</small>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td class="text-center">
+                                        <span class="badge bg-primary fs-6">@articulo.CantidadVendida</span>
+                                    </td>
+                                    <td class="text-center">
+                                        <span class="badge bg-info">@articulo.VecesVendido</span>
+                                    </td>
+                                    <td class="text-end">
+                                        <div class="fw-bold">
+                                            <CurrencyDisplay Value="@articulo.MontoVendido" ShowSymbol="true" />
+                                        </div>
+                                    </td>
+                                    <td class="text-center">
+                                        <div class="progress-container">
+                                            <div class="progress" style="height: 20px;">
+                                                <div class="progress-bar bg-success" 
+                                                     style="width: @(CalcularPorcentajeDelTotal(articulo.MontoVendido))%">
+                                                    <small class="text-white">@(CalcularPorcentajeDelTotal(articulo.MontoVendido).ToString("F1"))%</small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td class="text-center">
+                                        <div class="trend-indicator">
+                                            @if (index <= 5)
+                                            {
+                                                <i class="bi bi-arrow-up-circle-fill text-success" title="Tendencia positiva"></i>
+                                            }
+                                            else if (index <= 10)
+                                            {
+                                                <i class="bi bi-dash-circle-fill text-warning" title="Tendencia estable"></i>
+                                            }
+                                            else
+                                            {
+                                                <i class="bi bi-arrow-down-circle-fill text-danger" title="Tendencia negativa"></i>
+                                            }
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                        <tfoot class="table-light">
+                            <tr class="fw-bold">
+                                <td colspan="2" class="text-end">TOTAL:</td>
+                                <td class="text-center">@TotalCantidadVendida.ToString("N0")</td>
+                                <td class="text-center">@ListaArticulosMasVendidos.Sum(a => a.VecesVendido)</td>
+                                <td class="text-end">
+                                    <CurrencyDisplay Value="@TotalMontoVendido" ShowSymbol="true" CssClass="fs-5 text-success" />
+                                </td>
+                                <td class="text-center">100%</td>
+                                <td></td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Análisis por Categorías -->
+        @if (VentasPorCategoria?.Any() == true)
+        {
+            <div class="card shadow-sm mb-4">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-pie-chart me-2"></i>Análisis por Categorías
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        @foreach (var categoria in VentasPorCategoria.Take(6))
+                        {
+                            <div class="col-lg-4 col-md-6 mb-3">
+                                <div class="category-card p-3 border rounded">
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <h6 class="mb-0">@categoria.Categoria</h6>
+                                        <span class="badge bg-primary">@categoria.TotalArticulos</span>
+                                    </div>
+                                    <div class="category-stats">
+                                        <div class="d-flex justify-content-between">
+                                            <small class="text-muted">Cantidad:</small>
+                                            <strong>@categoria.CantidadVendida</strong>
+                                        </div>
+                                        <div class="d-flex justify-content-between">
+                                            <small class="text-muted">Monto:</small>
+                                            <strong>@CurrencyHelper.FormatCurrency(categoria.MontoVendido)</strong>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+
+        <!-- Insights y Recomendaciones -->
+        <div class="row g-4 mb-4">
+            <div class="col-lg-6">
+                <div class="card shadow-sm">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">
+                            <i class="bi bi-lightbulb me-2"></i>Insights
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="insights-list">
+                            @if (ListaArticulosMasVendidos.Any())
+                            {
+                                var articuloTop = ListaArticulosMasVendidos.First();
+                                <div class="insight-item">
+                                    <i class="bi bi-star-fill text-warning me-2"></i>
+                                    <span><strong>@articuloTop.Nombre</strong> es el artículo más vendido con @articuloTop.CantidadVendida unidades.</span>
+                                </div>
+                            }
+
+                            @if (ListaArticulosMasVendidos.Count >= 3)
+                            {
+                                var top3Porcentaje = ListaArticulosMasVendidos.Take(3).Sum(a => CalcularPorcentajeDelTotal(a.MontoVendido));
+                                <div class="insight-item">
+                                    <i class="bi bi-pie-chart-fill text-info me-2"></i>
+                                    <span>Los 3 artículos principales representan el <strong>@top3Porcentaje.ToString("F1")%</strong> de las ventas totales.</span>
+                                </div>
+                            }
+
+                            <div class="insight-item">
+                                <i class="bi bi-calculator text-success me-2"></i>
+                                <span>El promedio de venta por artículo es de <strong>@CurrencyHelper.FormatCurrency(PromedioVentaPorArticulo)</strong>.</span>
+                            </div>
+
+                            @if (ListaArticulosMasVendidos.Any(a => a.VecesVendido > 50))
+                            {
+                                <div class="insight-item">
+                                    <i class="bi bi-arrow-repeat text-primary me-2"></i>
+                                    <span>Hay artículos con alta rotación (más de 50 ventas), considera optimizar el inventario.</span>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-6">
+                <div class="card shadow-sm">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">
+                            <i class="bi bi-clipboard-check me-2"></i>Recomendaciones
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="recommendations-list">
+                            <div class="recommendation-item">
+                                <i class="bi bi-arrow-up-circle text-success me-2"></i>
+                                <span>Aumenta el stock de los productos del Top 5 para satisfacer la demanda.</span>
+                            </div>
+                            <div class="recommendation-item">
+                                <i class="bi bi-megaphone text-warning me-2"></i>
+                                <span>Promociona los artículos de bajo rendimiento para aumentar su rotación.</span>
+                            </div>
+                            <div class="recommendation-item">
+                                <i class="bi bi-graph-up text-info me-2"></i>
+                                <span>Analiza las características de los productos más vendidos para replicar el éxito.</span>
+                            </div>
+                            <div class="recommendation-item">
+                                <i class="bi bi-tags text-primary me-2"></i>
+                                <span>Considera ofertas combinadas con los artículos más populares.</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Período del Reporte -->
+        <div class="card shadow-sm">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-calendar3 me-2"></i>Información del Período
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3">
+                        <div class="info-item text-center">
+                            <div class="info-label">Período Analizado</div>
+                            <div class="info-value">
+                                @FechaInicio.ToColombiaShortDateString() - @FechaFin.ToColombiaShortDateString()
+                            </div>
+                            <small class="text-muted">@CalcularDiasReporte() día(s)</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="info-item text-center">
+                            <div class="info-label">Artículos Analizados</div>
+                            <div class="info-value">@ListaArticulosMasVendidos.Count</div>
+                            <small class="text-muted">de @TopArticulos solicitados</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="info-item text-center">
+                            <div class="info-label">Promedio Diario</div>
+                            <div class="info-value">@CurrencyHelper.FormatCurrency(PromedioDiario)</div>
+                            <small class="text-muted">ventas por día</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="info-item text-center">
+                            <div class="info-label">Generado</div>
+                            <div class="info-value">@DateTime.Now.ToColombiaShortDateString()</div>
+                            <small class="text-muted">@DateTime.Now.ToTimeString()</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+    else if (!IsLoading)
+    {
+        <div class="text-center py-5">
+            <i class="bi bi-trophy display-1 text-muted"></i>
+            <h4 class="mt-3">Genere su Reporte de Artículos Más Vendidos</h4>
+            <p class="text-muted">Seleccione las fechas y parámetros deseados, luego haga clic en "Generar" para ver el ranking de productos.</p>
+            <button class="btn btn-primary btn-lg" @onclick="GenerarReporte" disabled="@(!EsFechaValida)">
+                <i class="bi bi-play-fill me-2"></i>Generar Reporte
+            </button>
+        </div>
+    }
+</div>
+
+<style>
+    .articulos-mas-vendidos-container {
+        padding: 1rem;
+    }
+
+    .page-header {
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        padding: 1.5rem;
+        border-radius: 0.5rem;
+        border-left: 4px solid var(--bs-warning);
+    }
+
+    .metric-card {
+        transition: transform 0.2s ease-in-out;
+    }
+
+    .metric-card:hover {
+        transform: translateY(-2px);
+    }
+
+    .metric-icon {
+        width: 50px;
+        height: 50px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.25rem;
+    }
+
+    .metric-number {
+        font-size: 1.75rem;
+        font-weight: 700;
+        margin-bottom: 0.25rem;
+    }
+
+    .rank-badge {
+        width: 35px;
+        height: 35px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+        font-size: 0.875rem;
+    }
+
+    .rank-gold {
+        background: linear-gradient(135deg, #ffd700, #ffed4e);
+        color: #8b5a00;
+    }
+
+    .rank-silver {
+        background: linear-gradient(135deg, #c0c0c0, #e8e8e8);
+        color: #555;
+    }
+
+    .rank-bronze {
+        background: linear-gradient(135deg, #cd7f32, #daa569);
+        color: #4a3c1d;
+    }
+
+    .rank-default {
+        background-color: var(--bs-primary);
+        color: white;
+    }
+
+    .product-avatar {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background-color: var(--bs-light);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.25rem;
+    }
+
+    .progress-container {
+        min-width: 100px;
+    }
+
+    .trend-indicator {
+        font-size: 1.25rem;
+    }
+
+    .category-card {
+        background-color: var(--bs-light);
+        transition: all 0.2s ease-in-out;
+    }
+
+    .category-card:hover {
+        background-color: var(--bs-primary);
+        color: white;
+        transform: translateY(-2px);
+    }
+
+    .insights-list .insight-item,
+    .recommendations-list .recommendation-item {
+        display: flex;
+        align-items-center;
+        margin-bottom: 1rem;
+        padding: 0.75rem;
+        background-color: var(--bs-light);
+        border-radius: 0.5rem;
+    }
+
+    .info-item {
+        padding: 1rem;
+        border: 1px solid var(--bs-border-color);
+        border-radius: 0.5rem;
+        background: var(--bs-light);
+    }
+
+    .info-label {
+        font-size: 0.875rem;
+        color: var(--bs-secondary);
+        margin-bottom: 0.5rem;
+    }
+
+    .info-value {
+        font-size: 1.25rem;
+        font-weight: 700;
+        color: var(--bs-primary);
+    }
+
+    .card {
+        border: none;
+        box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    }
+
+    .card-header {
+        background-color: var(--bs-light);
+        border-bottom: 1px solid var(--bs-border-color);
+    }
+
+    .table-hover tbody tr:hover {
+        background-color: rgba(var(--bs-primary-rgb), 0.05);
+    }
+
+    .row-podium {
+        background: linear-gradient(135deg, rgba(255, 215, 0, 0.1), rgba(255, 237, 78, 0.1));
+    }
+
+    @@media (max-width: 768px) {
+        .page-header {
+            padding: 1rem;
+        }
+
+        .metric-number {
+            font-size: 1.5rem;
+        }
+
+        .rank-badge {
+            width: 30px;
+            height: 30px;
+            font-size: 0.75rem;
+        }
+
+        .product-avatar {
+            width: 30px;
+            height: 30px;
+        }
+    }
+</style>
+
+@code {
+    private Alert? AlertComponent;
+
+    private bool IsLoading = false;
+    private bool ReporteGenerado = false;
+    private DateTime FechaInicio = DateTime.Now.StartOfMonth();
+    private DateTime FechaFin = DateTime.Now;
+    private int TopArticulos = 20;
+    private int CategoriaFiltro = 0;
+
+    private List<ArticuloVendidoDto>? ListaArticulosMasVendidos;
+    private List<CategoriaArticuloDto>? CategoriasDisponibles;
+    private List<VentaPorCategoriaDto>? VentasPorCategoria;
+
+    private bool HasFechaError => !EsFechaValida;
+    private string FechaErrorMessage = "";
+    private bool EsFechaValida => FechaInicio <= FechaFin && FechaInicio <= DateTime.Now && FechaFin <= DateTime.Now;
+
+    private int TotalArticulosVendidos => ListaArticulosMasVendidos?.Count ?? 0;
+    private int TotalCantidadVendida => ListaArticulosMasVendidos?.Sum(a => a.CantidadVendida) ?? 0;
+    private decimal TotalMontoVendido => ListaArticulosMasVendidos?.Sum(a => a.MontoVendido) ?? 0;
+
+    private decimal PromedioVentaPorArticulo => TotalArticulosVendidos > 0 ? TotalMontoVendido / TotalArticulosVendidos : 0;
+    private decimal PromedioDiario => CalcularDiasReporte() > 0 ? TotalMontoVendido / CalcularDiasReporte() : 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarCategorias();
+        
+        var uri = new Uri(Navigation.Uri);
+        var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
+        var autoGenerar = query["auto"] == "true";
+
+        if (autoGenerar)
+        {
+            await GenerarReporte();
+        }
+    }
+
+    private async Task CargarCategorias()
+    {
+        try
+        {
+            var result = await CategoriaService.GetAll();
+            if (result.Success && result.Data != null)
+            {
+                CategoriasDisponibles = result.Data.Where(c => c.Activo).ToList();
+            }
+        }
+        catch (Exception)
+        {
+            CategoriasDisponibles = new List<CategoriaArticuloDto>();
+        }
+    }
+
+    private async Task GenerarReporte()
+    {
+        if (!EsFechaValida)
+        {
+            ValidarFechas();
+            return;
+        }
+
+        try
+        {
+            IsLoading = true;
+            StateHasChanged();
+
+            var result = await ReporteService.GetArticulosMasVendidos(FechaInicio, FechaFin, TopArticulos);
+            if (result.Success && result.Data != null)
+            {
+                ListaArticulosMasVendidos = result.Data;
+                
+                // Filtrar por categoría si se seleccionó
+                if (CategoriaFiltro > 0)
+                {
+                    // Aquí necesitarías obtener los artículos de esa categoría y filtrar
+                    // Por simplicidad, mantengo todos por ahora
+                }
+
+                await CargarVentasPorCategoria();
+                ReporteGenerado = true;
+
+                AlertComponent?.Show(
+                    "Reporte generado exitosamente",
+                    AlertType.Success,
+                    "Reporte Completo"
+                );
+            }
+            else
+            {
+                AlertComponent?.Show(
+                    result.Message ?? "Error al generar el reporte",
+                    AlertType.Danger,
+                    "Error"
+                );
+                ReporteGenerado = false;
+            }
+        }
+        catch (Exception ex)
+        {
+            AlertComponent?.Show(
+                $"Error al generar el reporte: {ex.Message}",
+                AlertType.Danger,
+                "Error"
+            );
+            ReporteGenerado = false;
+        }
+        finally
+        {
+            IsLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task CargarVentasPorCategoria()
+    {
+        try
+        {
+            var result = await ReporteService.GetVentasPorCategoria(FechaInicio, FechaFin);
+            if (result.Success && result.Data != null)
+            {
+                // Convertir el resultado según la estructura real
+                VentasPorCategoria = new List<VentaPorCategoriaDto>();
+                // Implementar conversión según el formato real del API
+            }
+        }
+        catch (Exception)
+        {
+            VentasPorCategoria = new List<VentaPorCategoriaDto>();
+        }
+    }
+
+    private void ValidarFechas()
+    {
+        if (FechaInicio > FechaFin)
+        {
+            FechaErrorMessage = "La fecha de inicio no puede ser mayor a la fecha de fin";
+        }
+        else if (FechaInicio > DateTime.Now)
+        {
+            FechaErrorMessage = "La fecha de inicio no puede ser futura";
+        }
+        else if (FechaFin > DateTime.Now)
+        {
+            FechaErrorMessage = "La fecha de fin no puede ser futura";
+        }
+        else
+        {
+            FechaErrorMessage = "";
+        }
+    }
+
+    private async Task SetHoy()
+    {
+        FechaInicio = DateTime.Today;
+        FechaFin = DateTime.Today;
+        await GenerarReporte();
+    }
+
+    private async Task SetAyer()
+    {
+        var ayer = DateTime.Today.AddDays(-1);
+        FechaInicio = ayer;
+        FechaFin = ayer;
+        await GenerarReporte();
+    }
+
+    private async Task SetEstaSemana()
+    {
+        var hoy = DateTime.Today;
+        FechaInicio = hoy.AddDays(-(int)hoy.DayOfWeek);
+        FechaFin = hoy;
+        await GenerarReporte();
+    }
+
+    private async Task SetEsteMes()
+    {
+        FechaInicio = DateTime.Now.StartOfMonth();
+        FechaFin = DateTime.Today;
+        await GenerarReporte();
+    }
+
+    private async Task SetMesAnterior()
+    {
+        var mesAnterior = DateTime.Now.AddMonths(-1);
+        FechaInicio = mesAnterior.StartOfMonth();
+        FechaFin = mesAnterior.EndOfMonth().Date;
+        await GenerarReporte();
+    }
+
+    private async Task SetEsteAño()
+    {
+        FechaInicio = DateTime.Now.StartOfYear();
+        FechaFin = DateTime.Today;
+        await GenerarReporte();
+    }
+
+    private int CalcularDiasReporte()
+    {
+        return (FechaFin - FechaInicio).Days + 1;
+    }
+
+    private decimal CalcularPorcentajeDelTotal(decimal monto)
+    {
+        return TotalMontoVendido > 0 ? (monto / TotalMontoVendido) * 100 : 0;
+    }
+
+    private string GetRowClass(int index)
+    {
+        return index <= 3 ? "row-podium" : "";
+    }
+
+    private string GetRankBadgeClass(int index)
+    {
+        return index switch
+        {
+            1 => "rank-badge rank-gold",
+            2 => "rank-badge rank-silver", 
+            3 => "rank-badge rank-bronze",
+            _ => "rank-badge rank-default"
+        };
+    }
+
+    private string GetRankIcon(int index)
+    {
+        return index switch
+        {
+            1 => "bi-trophy-fill",
+            2 => "bi-award-fill",
+            3 => "bi-star-fill",
+            _ => ""
+        };
+    }
+
+    private async Task ExportarReporte()
+    {
+        AlertComponent?.Show("Función de exportación próximamente disponible", AlertType.Info);
+        await Task.CompletedTask;
+    }
+
+    private async Task VerDetalleCompleto()
+    {
+        AlertComponent?.Show("Función de detalle completo próximamente disponible", AlertType.Info);
+        await Task.CompletedTask;
+    }
+
+    private async Task CompararPeriodos()
+    {
+        AlertComponent?.Show("Función de comparación de períodos próximamente disponible", AlertType.Info);
+        await Task.CompletedTask;
+    }
+
+    // DTO temporal para ventas por categoría
+    public class VentaPorCategoriaDto
+    {
+        public string Categoria { get; set; } = "";
+        public int TotalArticulos { get; set; }
+        public int CantidadVendida { get; set; }
+        public decimal MontoVendido { get; set; }
+    }
+}

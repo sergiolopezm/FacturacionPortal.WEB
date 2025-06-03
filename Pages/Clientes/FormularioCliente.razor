@@ -1,0 +1,665 @@
+﻿@page "/clientes/crear"
+@page "/clientes/editar/{ClienteId:int}"
+@using FacturacionPortal.WEB.Models.Facturacion
+@using FacturacionPortal.WEB.Services.Interface
+@using FacturacionPortal.WEB.Shared.Components
+@using FacturacionPortal.WEB.Util
+@using Microsoft.AspNetCore.Components.Forms
+@inject IClienteService ClienteService
+@inject NavigationManager Navigation
+@inject IJSRuntime JSRuntime
+
+<PageTitle>@TituloFormulario - FacturacionPortal</PageTitle>
+
+<div class="formulario-cliente-container">
+    <!-- Header -->
+    <div class="page-header mb-4">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h2 class="mb-1">
+                    <i class="bi @IconoFormulario text-primary me-2"></i>
+                    @TituloFormulario
+                </h2>
+                <p class="text-muted mb-0">@DescripcionFormulario</p>
+            </div>
+            <div class="d-flex gap-2">
+                <button class="btn btn-outline-secondary" @onclick="Cancelar">
+                    <i class="bi bi-x me-1"></i>Cancelar
+                </button>
+                @if (EsEdicion && ClienteOriginal != null)
+                {
+                    <button class="btn btn-outline-info" @onclick="VerCliente">
+                        <i class="bi bi-eye me-1"></i>Ver Cliente
+                    </button>
+                }
+            </div>
+        </div>
+    </div>
+
+    <Alert @ref="AlertComponent" />
+
+    @if (IsLoading)
+    {
+        <Loading IsVisible="true" Text="@MensajeCarga" />
+    }
+    else
+    {
+        <div class="row justify-content-center">
+            <div class="col-lg-8">
+                <div class="card shadow-sm">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">
+                            <i class="bi bi-person-lines-fill me-2"></i>Información del Cliente
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <EditForm Model="@ClienteForm" OnValidSubmit="@GuardarCliente">
+                            <DataAnnotationsValidator />
+
+                            <!-- Información Personal -->
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label class="form-label">Número de Documento *</label>
+                                        <InputText @bind-Value="ClienteForm.NumeroDocumento"
+                                                   class=@($"form-control {GetFieldCssClass(nameof(ClienteForm.NumeroDocumento))}")
+                                                   placeholder="Ej: 1234567890"
+                                                   maxlength="15"
+                                                   disabled="@IsSaving" />
+                                        <ValidationMessage For="@(() => ClienteForm.NumeroDocumento)" />
+                                        <div class="form-text">Cédula, NIT u otro documento de identificación</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label class="form-label">Teléfono *</label>
+                                        <InputText @bind-Value="ClienteForm.Telefono"
+                                                   class=@($"form-control {GetFieldCssClass(nameof(ClienteForm.Telefono))}")
+                                                   placeholder="Ej: 300 123 4567"
+                                                   maxlength="20"
+                                                   disabled="@IsSaving" />
+                                        <ValidationMessage For="@(() => ClienteForm.Telefono)" />
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label class="form-label">Nombres *</label>
+                                        <InputText @bind-Value="ClienteForm.Nombres"
+                                                   class=@($"form-control {GetFieldCssClass(nameof(ClienteForm.Nombres))}")
+                                                   placeholder="Ej: Juan Carlos"
+                                                   maxlength="100"
+                                                   disabled="@IsSaving" />
+                                        <ValidationMessage For="@(() => ClienteForm.Nombres)" />
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label class="form-label">Apellidos *</label>
+                                        <InputText @bind-Value="ClienteForm.Apellidos"
+                                                   class=@($"form-control {GetFieldCssClass(nameof(ClienteForm.Apellidos))}")
+                                                   placeholder="Ej: Pérez García"
+                                                   maxlength="100"
+                                                   disabled="@IsSaving" />
+                                        <ValidationMessage For="@(() => ClienteForm.Apellidos)" />
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label">Dirección *</label>
+                                <InputText @bind-Value="ClienteForm.Direccion"
+                                           class=@($"form-control {GetFieldCssClass(nameof(ClienteForm.Direccion))}")
+                                           placeholder="Ej: Calle 123 # 45-67, Barrio Centro"
+                                           maxlength="250"
+                                           disabled="@IsSaving" />
+                                <ValidationMessage For="@(() => ClienteForm.Direccion)" />
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label">Email</label>
+                                <InputText @bind-Value="ClienteForm.Email" 
+                                           type="email"
+                                           class=@($"form-control {GetFieldCssClass(nameof(ClienteForm.Email))}")
+                                           placeholder="Ej: cliente@email.com"
+                                           maxlength="100"
+                                           disabled="@IsSaving" />
+                                <ValidationMessage For="@(() => ClienteForm.Email)" />
+                                <div class="form-text">Campo opcional</div>
+                            </div>
+
+                            @if (EsEdicion)
+                            {
+                                <div class="mb-3">
+                                    <div class="form-check">
+                                        <InputCheckbox @bind-Value="ClienteForm.Activo" 
+                                                       class="form-check-input"
+                                                       disabled="@IsSaving" />
+                                        <label class="form-check-label">
+                                            Cliente activo
+                                        </label>
+                                    </div>
+                                    <div class="form-text">Desmarque si desea inactivar el cliente</div>
+                                </div>
+                            }
+
+                            <!-- Vista previa del nombre completo -->
+                            @if (!string.IsNullOrEmpty(ClienteForm.Nombres) || !string.IsNullOrEmpty(ClienteForm.Apellidos))
+                            {
+                                <div class="alert alert-info d-flex align-items-center" role="alert">
+                                    <i class="bi bi-info-circle me-2"></i>
+                                    <div>
+                                        <strong>Vista previa:</strong> @($"{ClienteForm.Nombres} {ClienteForm.Apellidos}".Trim())
+                                    </div>
+                                </div>
+                            }
+
+                            <!-- Validación en tiempo real -->
+                            @if (ErroresValidacion.Any())
+                            {
+                                <div class="alert alert-warning" role="alert">
+                                    <h6 class="alert-heading">
+                                        <i class="bi bi-exclamation-triangle me-1"></i>
+                                        Corrija los siguientes errores:
+                                    </h6>
+                                    <ul class="mb-0">
+                                        @foreach (var error in ErroresValidacion)
+                                        {
+                                            <li>@error</li>
+                                        }
+                                    </ul>
+                                </div>
+                            }
+
+                            <!-- Botones de acción -->
+                            <div class="d-flex justify-content-between">
+                                <button type="button" class="btn btn-outline-secondary" @onclick="Cancelar" disabled="@IsSaving">
+                                    <i class="bi bi-x me-1"></i>Cancelar
+                                </button>
+
+                                <div class="d-flex gap-2">
+                                    @if (EsEdicion)
+                                    {
+                                        <button type="button" class="btn btn-outline-primary" @onclick="RestaurarDatos" disabled="@IsSaving">
+                                            <i class="bi bi-arrow-clockwise me-1"></i>Restaurar
+                                        </button>
+                                    }
+
+                                    <button type="submit" class="btn btn-success" disabled="@(IsSaving || !IsFormValid)">
+                                        @if (IsSaving)
+                                        {
+                                            <span class="spinner-border spinner-border-sm me-1"></span>
+                                            <span>@MensajeGuardado</span>
+                                        }
+                                        else
+                                        {
+                                            <i class="bi @(EsEdicion ? "bi-check2" : "bi-plus") me-1"></i>
+                                            <span>@TextoBotonGuardar</span>
+                                        }
+                                    </button>
+                                </div>
+                            </div>
+                        </EditForm>
+                    </div>
+                </div>
+
+                @if (EsEdicion && ClienteOriginal != null)
+                {
+                    <!-- Información adicional para edición -->
+                    <div class="card shadow-sm mt-4">
+                        <div class="card-header">
+                            <h6 class="card-title mb-0">
+                                <i class="bi bi-info-circle me-2"></i>Información Adicional
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="info-item">
+                                        <small class="text-muted">Fecha de Registro</small>
+                                        <div class="fw-bold">@ClienteOriginal.FechaCreacion.ToString("dd/MM/yyyy HH:mm")</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="info-item">
+                                        <small class="text-muted">Última Modificación</small>
+                                        <div class="fw-bold">
+                                            @(ClienteOriginal.FechaModificacion?.ToString("dd/MM/yyyy HH:mm") ?? "Nunca")
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="row mt-3">
+                                <div class="col-md-4">
+                                    <div class="info-item">
+                                        <small class="text-muted">Total de Facturas</small>
+                                        <div class="fw-bold text-info">@ClienteOriginal.TotalFacturas</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="info-item">
+                                        <small class="text-muted">Total Compras</small>
+                                        <div class="fw-bold text-success">@ClienteOriginal.MontoTotalComprasFormateado</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="info-item">
+                                        <small class="text-muted">Estado</small>
+                                        <div class="fw-bold">
+                                            <StatusBadge Status="@(ClienteOriginal.Activo ? "Activo" : "Inactivo")" />
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            @if (ClienteOriginal.TotalFacturas > 0)
+                            {
+                                <div class="mt-3">
+                                    <button class="btn btn-outline-primary btn-sm" @onclick="VerFacturasCliente">
+                                        <i class="bi bi-receipt me-1"></i>Ver Facturas del Cliente
+                                    </button>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+<Confirm @ref="ConfirmDialog" />
+
+<style>
+    .formulario-cliente-container {
+        padding: 1rem;
+    }
+
+    .page-header {
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        padding: 1.5rem;
+        border-radius: 0.5rem;
+        border-left: 4px solid var(--bs-primary);
+    }
+
+    .card {
+        border: none;
+        box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    }
+
+    .card-header {
+        background-color: var(--bs-light);
+        border-bottom: 1px solid var(--bs-border-color);
+    }
+
+    .info-item {
+        margin-bottom: 1rem;
+        padding-bottom: 0.75rem;
+        border-bottom: 1px solid var(--bs-border-color);
+    }
+
+    .info-item:last-child {
+        border-bottom: none;
+        margin-bottom: 0;
+        padding-bottom: 0;
+    }
+
+    .form-control.is-valid {
+        border-color: #198754;
+        padding-right: calc(1.5em + 0.75rem);
+        background-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'><path fill='%23198754' d='m2.3 6.73.5-.4 1.8-1.38L6.7 3.3l.4-.55-2.2 1.8-1.4 1.05z'/></svg>");
+        background-repeat: no-repeat;
+        background-position: right calc(0.375em + 0.1875rem) center;
+        background-size: calc(0.75em + 0.375rem) calc(0.75em + 0.375rem);
+    }
+
+    .form-control.is-invalid {
+        border-color: #dc3545;
+        padding-right: calc(1.5em + 0.75rem);
+        background-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' width='12' height='12' fill='none' stroke='%23dc3545'><circle cx='6' cy='6' r='4.5'/><path d='m5.8 5.8 4.4 4.4m0-4.4-4.4 4.4'/></svg>");
+        background-repeat: no-repeat;
+        background-position: right calc(0.375em + 0.1875rem) center;
+        background-size: calc(0.75em + 0.375rem) calc(0.75em + 0.375rem);
+    }
+
+    @@media (max-width: 768px) {
+        .page-header {
+            padding: 1rem;
+        }
+
+        .d-flex.gap-2 {
+            flex-direction: column;
+            gap: 0.5rem !important;
+        }
+    }
+</style>
+
+@code {
+    [Parameter] public int? ClienteId { get; set; }
+
+    private Alert? AlertComponent;
+    private Confirm? ConfirmDialog;
+    private EditContext? EditContext;
+
+    private ClienteDto ClienteForm = new();
+    private ClienteDto? ClienteOriginal;
+    private List<string> ErroresValidacion = new();
+
+    private bool IsLoading = false;
+    private bool IsSaving = false;
+    private bool EsEdicion => ClienteId.HasValue;
+    private bool IsFormValid = false;
+
+    private string TituloFormulario => EsEdicion ? "Editar Cliente" : "Crear Cliente";
+    private string DescripcionFormulario => EsEdicion ? "Modifique la información del cliente" : "Complete los datos del nuevo cliente";
+    private string IconoFormulario => EsEdicion ? "bi-pencil-square" : "bi-person-plus";
+    private string MensajeCarga => EsEdicion ? "Cargando datos del cliente..." : "Inicializando formulario...";
+    private string TextoBotonGuardar => EsEdicion ? "Actualizar Cliente" : "Crear Cliente";
+    private string MensajeGuardado => EsEdicion ? "Actualizando..." : "Creando...";
+
+    protected override async Task OnInitializedAsync()
+    {
+        InitializeForm();
+        
+        if (EsEdicion && ClienteId.HasValue)
+        {
+            await CargarCliente();
+        }
+        else
+        {
+            IsLoading = false;
+        }
+    }
+
+    private void InitializeForm()
+    {
+        ClienteForm = new ClienteDto
+        {
+            Activo = true
+        };
+
+        EditContext = new EditContext(ClienteForm);
+        EditContext.OnFieldChanged += OnFieldChanged;
+        EditContext.OnValidationRequested += OnValidationRequested;
+    }
+
+    private async Task CargarCliente()
+    {
+        if (!ClienteId.HasValue) return;
+
+        try
+        {
+            IsLoading = true;
+            StateHasChanged();
+
+            var result = await ClienteService.GetById(ClienteId.Value);
+            if (result.Success && result.Data != null)
+            {
+                ClienteOriginal = result.Data;
+                ClienteForm = new ClienteDto
+                {
+                    Id = result.Data.Id,
+                    NumeroDocumento = result.Data.NumeroDocumento,
+                    Nombres = result.Data.Nombres,
+                    Apellidos = result.Data.Apellidos,
+                    Direccion = result.Data.Direccion,
+                    Telefono = result.Data.Telefono,
+                    Email = result.Data.Email,
+                    Activo = result.Data.Activo
+                };
+
+                InitializeForm();
+            }
+            else
+            {
+                AlertComponent?.Show(
+                    result.Message ?? "Cliente no encontrado",
+                    AlertType.Danger,
+                    "Error"
+                );
+                
+                await Task.Delay(2000);
+                Navigation.NavigateTo("/clientes");
+            }
+        }
+        catch (Exception ex)
+        {
+            AlertComponent?.Show(
+                $"Error al cargar el cliente: {ex.Message}",
+                AlertType.Danger,
+                "Error"
+            );
+        }
+        finally
+        {
+            IsLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private void OnFieldChanged(object? sender, FieldChangedEventArgs e)
+    {
+        ValidateForm();
+        StateHasChanged();
+    }
+
+    private void OnValidationRequested(object? sender, ValidationRequestedEventArgs e)
+    {
+        ValidateForm();
+    }
+
+    private void ValidateForm()
+    {
+        ErroresValidacion.Clear();
+
+        if (string.IsNullOrWhiteSpace(ClienteForm.NumeroDocumento))
+            ErroresValidacion.Add("El número de documento es requerido");
+
+        if (string.IsNullOrWhiteSpace(ClienteForm.Nombres))
+            ErroresValidacion.Add("Los nombres son requeridos");
+
+        if (string.IsNullOrWhiteSpace(ClienteForm.Apellidos))
+            ErroresValidacion.Add("Los apellidos son requeridos");
+
+        if (string.IsNullOrWhiteSpace(ClienteForm.Direccion))
+            ErroresValidacion.Add("La dirección es requerida");
+
+        if (string.IsNullOrWhiteSpace(ClienteForm.Telefono))
+            ErroresValidacion.Add("El teléfono es requerido");
+
+        if (!string.IsNullOrEmpty(ClienteForm.Email) && !ValidationHelper.IsValidEmail(ClienteForm.Email))
+            ErroresValidacion.Add("El formato del email no es válido");
+
+        if (!string.IsNullOrEmpty(ClienteForm.NumeroDocumento) && !ValidationHelper.IsValidDocumento(ClienteForm.NumeroDocumento))
+            ErroresValidacion.Add("El formato del documento no es válido");
+
+        if (!string.IsNullOrEmpty(ClienteForm.Telefono) && !ValidationHelper.IsValidTelefono(ClienteForm.Telefono))
+            ErroresValidacion.Add("El formato del teléfono no es válido");
+
+        IsFormValid = !ErroresValidacion.Any();
+    }
+
+    private string GetFieldCssClass(string fieldName)
+    {
+        if (EditContext == null) return "";
+
+        var fieldIdentifier = EditContext.Field(fieldName);
+        var isModified = EditContext.IsModified(fieldIdentifier);
+        var isValid = !EditContext.GetValidationMessages(fieldIdentifier).Any();
+
+        if (!isModified) return "";
+
+        return isValid ? "is-valid" : "is-invalid";
+    }
+
+    private async Task GuardarCliente()
+    {
+        if (!IsFormValid || IsSaving) return;
+
+        if (EditContext != null && !EditContext.Validate()) return;
+
+        try
+        {
+            IsSaving = true;
+            StateHasChanged();
+
+            if (EsEdicion && ClienteId.HasValue)
+            {
+                var result = await ClienteService.Update(ClienteId.Value, ClienteForm);
+                if (result.Success)
+                {
+                    AlertComponent?.Show(
+                        $"Cliente {ClienteForm.Nombres} {ClienteForm.Apellidos} actualizado exitosamente",
+                        AlertType.Success,
+                        "Cliente Actualizado"
+                    );
+
+                    await Task.Delay(1500);
+                    Navigation.NavigateTo($"/clientes/{ClienteId.Value}");
+                }
+                else
+                {
+                    AlertComponent?.Show(
+                        result.Message ?? "Error al actualizar el cliente",
+                        AlertType.Danger,
+                        "Error"
+                    );
+                }
+            }
+            else
+            {
+                var result = await ClienteService.Create(ClienteForm);
+                if (result.Success && result.Data != null)
+                {
+                    AlertComponent?.Show(
+                        $"Cliente {result.Data.Nombres} {result.Data.Apellidos} creado exitosamente",
+                        AlertType.Success,
+                        "Cliente Creado"
+                    );
+
+                    await Task.Delay(1500);
+                    Navigation.NavigateTo($"/clientes/{result.Data.Id}");
+                }
+                else
+                {
+                    AlertComponent?.Show(
+                        result.Message ?? "Error al crear el cliente",
+                        AlertType.Danger,
+                        "Error"
+                    );
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            AlertComponent?.Show(
+                $"Error al guardar: {ex.Message}",
+                AlertType.Danger,
+                "Error"
+            );
+        }
+        finally
+        {
+            IsSaving = false;
+            StateHasChanged();
+        }
+    }
+
+    private void RestaurarDatos()
+    {
+        if (ClienteOriginal != null)
+        {
+            ClienteForm = new ClienteDto
+            {
+                Id = ClienteOriginal.Id,
+                NumeroDocumento = ClienteOriginal.NumeroDocumento,
+                Nombres = ClienteOriginal.Nombres,
+                Apellidos = ClienteOriginal.Apellidos,
+                Direccion = ClienteOriginal.Direccion,
+                Telefono = ClienteOriginal.Telefono,
+                Email = ClienteOriginal.Email,
+                Activo = ClienteOriginal.Activo
+            };
+
+            InitializeForm();
+            StateHasChanged();
+        }
+    }
+
+    private async Task Cancelar()
+    {
+        if (HasUnsavedChanges() && ConfirmDialog != null)
+        {
+            var confirmed = await ConfirmDialog.ShowAsync(
+                "Cancelar Edición",
+                "¿Está seguro que desea cancelar? Se perderán los cambios no guardados.",
+                ConfirmType.Warning
+            );
+
+            if (!confirmed) return;
+        }
+
+        var returnUrl = GetReturnUrl();
+        Navigation.NavigateTo(returnUrl);
+    }
+
+    private bool HasUnsavedChanges()
+    {
+        if (!EsEdicion) return !IsEmptyForm();
+        if (ClienteOriginal == null) return false;
+
+        return ClienteForm.NumeroDocumento != ClienteOriginal.NumeroDocumento ||
+               ClienteForm.Nombres != ClienteOriginal.Nombres ||
+               ClienteForm.Apellidos != ClienteOriginal.Apellidos ||
+               ClienteForm.Direccion != ClienteOriginal.Direccion ||
+               ClienteForm.Telefono != ClienteOriginal.Telefono ||
+               ClienteForm.Email != ClienteOriginal.Email ||
+               ClienteForm.Activo != ClienteOriginal.Activo;
+    }
+
+    private bool IsEmptyForm()
+    {
+        return string.IsNullOrWhiteSpace(ClienteForm.NumeroDocumento) &&
+               string.IsNullOrWhiteSpace(ClienteForm.Nombres) &&
+               string.IsNullOrWhiteSpace(ClienteForm.Apellidos) &&
+               string.IsNullOrWhiteSpace(ClienteForm.Direccion) &&
+               string.IsNullOrWhiteSpace(ClienteForm.Telefono) &&
+               string.IsNullOrWhiteSpace(ClienteForm.Email);
+    }
+
+    private string GetReturnUrl()
+    {
+        var uri = new Uri(Navigation.Uri);
+        var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
+        var returnUrl = query["returnUrl"];
+
+        return !string.IsNullOrEmpty(returnUrl) ? returnUrl : "/clientes";
+    }
+
+    private void VerCliente()
+    {
+        if (ClienteId.HasValue)
+        {
+            Navigation.NavigateTo($"/clientes/{ClienteId.Value}");
+        }
+    }
+
+    private void VerFacturasCliente()
+    {
+        if (ClienteId.HasValue)
+        {
+            Navigation.NavigateTo($"/facturas?clienteId={ClienteId.Value}");
+        }
+    }
+
+    public void Dispose()
+    {
+        if (EditContext != null)
+        {
+            EditContext.OnFieldChanged -= OnFieldChanged;
+            EditContext.OnValidationRequested -= OnValidationRequested;
+        }
+    }
+}

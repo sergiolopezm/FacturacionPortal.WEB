@@ -1,6 +1,12 @@
 ﻿using Microsoft.AspNetCore.Components.Authorization;
 using System.Net;
 using System.Net.Http.Headers;
+using System.Net.Http.Json;
+using System.Text;
+using System.Text.Json;
+using FacturacionPortal.WEB.Util;
+using Microsoft.AspNetCore.Components;
+using Microsoft.JSInterop;
 
 namespace FacturacionPortal.WEB.Helpers
 {
@@ -9,15 +15,21 @@ namespace FacturacionPortal.WEB.Helpers
         private readonly LocalStorageService _localStorage;
         private readonly AuthenticationStateProvider _authStateProvider;
         private readonly ILogger<HttpInterceptor> _logger;
+        private readonly IJSRuntime _jsRuntime;
+        private readonly NavigationManager _navigationManager;
 
         public HttpInterceptor(
             LocalStorageService localStorage,
             AuthenticationStateProvider authStateProvider,
-            ILogger<HttpInterceptor> logger)
+            ILogger<HttpInterceptor> logger,
+            IJSRuntime jsRuntime,
+            NavigationManager navigationManager)
         {
             _localStorage = localStorage;
             _authStateProvider = authStateProvider;
             _logger = logger;
+            _jsRuntime = jsRuntime;
+            _navigationManager = navigationManager;
         }
 
         protected override async Task<HttpResponseMessage> SendAsync(
@@ -41,17 +53,62 @@ namespace FacturacionPortal.WEB.Helpers
                     request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
                 }
 
+                // Intentar la solicitud HTTP
                 var response = await base.SendAsync(request, cancellationToken);
+
+                // Si es un error de autenticación, redirigir al login
+                if (response.StatusCode == HttpStatusCode.Unauthorized)
+                {
+                    _navigationManager.NavigateTo("/login", true);
+                    return response;
+                }
 
                 // Manejar respuestas de error
                 await HandleResponse(response);
 
                 return response;
             }
+            catch (HttpRequestException ex)
+            {
+                Console.WriteLine($"Error de conexión HTTP: {ex.Message}");
+
+                // Crear una respuesta personalizada para los errores de conexión
+                var errorResponse = new HttpResponseMessage(HttpStatusCode.ServiceUnavailable)
+                {
+                    Content = new StringContent(
+                        JsonSerializer.Serialize(new
+                        {
+                            exito = false,
+                            mensaje = "Error de conexión con el servidor",
+                            detalle = ex.Message
+                        }),
+                        Encoding.UTF8,
+                        "application/json"
+                    )
+                };
+
+                return errorResponse;
+            }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error en HttpInterceptor al procesar la solicitud");
-                throw;
+                Console.WriteLine($"Error general: {ex.Message}");
+
+                // Crear una respuesta personalizada para otros errores
+                var errorResponse = new HttpResponseMessage(HttpStatusCode.InternalServerError)
+                {
+                    Content = new StringContent(
+                        JsonSerializer.Serialize(new
+                        {
+                            exito = false,
+                            mensaje = "Error al procesar la solicitud",
+                            detalle = ex.Message
+                        }),
+                        Encoding.UTF8,
+                        "application/json"
+                    )
+                };
+
+                return errorResponse;
             }
         }
 

@@ -1,0 +1,922 @@
+﻿@page "/articulos"
+@using FacturacionPortal.WEB.Models.Common
+@using FacturacionPortal.WEB.Models.Facturacion
+@using FacturacionPortal.WEB.Services.Interface
+@using FacturacionPortal.WEB.Shared.Components
+@using FacturacionPortal.WEB.Components.Shared
+@using FacturacionPortal.WEB.Helpers
+@using FacturacionPortal.WEB.Util
+@using FacturacionPortal.WEB.Util.Extensions
+@using Microsoft.AspNetCore.Components.Authorization
+@inject IArticuloService ArticuloService
+@inject ICategoriaArticuloService CategoriaService
+@inject NavigationManager Navigation
+@inject IJSRuntime JSRuntime
+
+<PageTitle>Artículos - FacturacionPortal</PageTitle>
+
+<div class="articulos-container">
+    <!-- Header -->
+    <div class="page-header mb-4">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h2 class="mb-1">
+                    <i class="bi bi-box-seam text-primary me-2"></i>
+                    Gestión de Artículos
+                </h2>
+                <p class="text-muted mb-0">Administre el inventario y catálogo de productos</p>
+            </div>
+            <div class="d-flex gap-2">
+                <button class="btn btn-outline-secondary" @onclick="RefreshData" disabled="@IsLoading">
+                    @if (IsLoading)
+                    {
+                        <span class="spinner-border spinner-border-sm me-1"></span>
+                    }
+                    else
+                    {
+                        <i class="bi bi-arrow-clockwise me-1"></i>
+                    }
+                    Actualizar
+                </button>
+                <button class="btn btn-primary" @onclick="CrearArticulo">
+                    <i class="bi bi-plus me-1"></i>Nuevo Artículo
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <Alert @ref="AlertComponent" />
+
+    <!-- Tarjetas de Resumen -->
+    <div class="row g-3 mb-4">
+        <div class="col-lg-3 col-md-6">
+            <div class="card summary-card border-0 shadow-sm">
+                <div class="card-body text-center">
+                    <div class="summary-icon bg-primary text-white rounded-circle mx-auto mb-2">
+                        <i class="bi bi-box-seam"></i>
+                    </div>
+                    <h4 class="summary-number text-primary">@TotalArticulos</h4>
+                    <small class="text-muted">Total Artículos</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-3 col-md-6">
+            <div class="card summary-card border-0 shadow-sm">
+                <div class="card-body text-center">
+                    <div class="summary-icon bg-success text-white rounded-circle mx-auto mb-2">
+                        <i class="bi bi-check-circle"></i>
+                    </div>
+                    <h4 class="summary-number text-success">@ArticulosActivos</h4>
+                    <small class="text-muted">Activos</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-3 col-md-6">
+            <div class="card summary-card border-0 shadow-sm">
+                <div class="card-body text-center">
+                    <div class="summary-icon bg-warning text-white rounded-circle mx-auto mb-2">
+                        <i class="bi bi-exclamation-triangle"></i>
+                    </div>
+                    <h4 class="summary-number text-warning">@ArticulosStockBajo</h4>
+                    <small class="text-muted">Stock Bajo</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-3 col-md-6">
+            <div class="card summary-card border-0 shadow-sm">
+                <div class="card-body text-center">
+                    <div class="summary-icon bg-info text-white rounded-circle mx-auto mb-2">
+                        <i class="bi bi-tags"></i>
+                    </div>
+                    <h4 class="summary-number text-info">@TotalCategorias</h4>
+                    <small class="text-muted">Categorías</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filtros y Búsqueda -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-header">
+            <h6 class="card-title mb-0">
+                <i class="bi bi-funnel me-2"></i>Filtros de Búsqueda
+            </h6>
+        </div>
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label class="form-label">Buscar</label>
+                    <div class="input-group">
+                        <span class="input-group-text">
+                            <i class="bi bi-search"></i>
+                        </span>
+                        <input type="text" class="form-control" placeholder="Código, nombre o descripción..."
+                               @bind="SearchTerm" @bind:event="oninput" @onkeypress="OnSearchKeyPress" />
+                        @if (!string.IsNullOrEmpty(SearchTerm))
+                        {
+                            <button class="btn btn-outline-secondary" type="button" @onclick="ClearSearch">
+                                <i class="bi bi-x"></i>
+                            </button>
+                        }
+                    </div>
+                </div>
+
+                <div class="col-md-3">
+                    <label class="form-label">Categoría</label>
+                    <select class="form-select" @bind="CategoriaFiltro">
+                        <option value="">Todas las categorías</option>
+                        @if (CategoriasDisponibles != null)
+                        {
+                            @foreach (var categoria in CategoriasDisponibles)
+                            {
+                                <option value="@categoria.Id">@categoria.Nombre</option>
+                            }
+                        }
+                    </select>
+                </div>
+
+                <div class="col-md-2">
+                    <label class="form-label">Estado</label>
+                    <select class="form-select" @bind="EstadoFiltro">
+                        <option value="">Todos</option>
+                        <option value="true">Activos</option>
+                        <option value="false">Inactivos</option>
+                    </select>
+                </div>
+
+                <div class="col-md-2">
+                    <label class="form-label">Stock</label>
+                    <select class="form-select" @bind="StockFiltro">
+                        <option value="">Todos</option>
+                        <option value="disponible">Con stock</option>
+                        <option value="bajo">Stock bajo</option>
+                        <option value="agotado">Agotado</option>
+                    </select>
+                </div>
+
+                <div class="col-md-1">
+                    <label class="form-label">&nbsp;</label>
+                    <button class="btn btn-primary w-100" @onclick="ApplyFilters" disabled="@IsLoading">
+                        @if (IsLoading)
+                        {
+                            <span class="spinner-border spinner-border-sm"></span>
+                        }
+                        else
+                        {
+                            <i class="bi bi-funnel"></i>
+                        }
+                    </button>
+                </div>
+            </div>
+
+            @if (HasActiveFilters)
+            {
+                <div class="mt-3">
+                    <small class="text-muted me-2">Filtros activos:</small>
+                    @if (!string.IsNullOrEmpty(SearchTerm))
+                    {
+                        <span class="badge bg-primary me-1">Búsqueda: @SearchTerm</span>
+                    }
+                    @if (CategoriaFiltro.HasValue)
+                    {
+                        <span class="badge bg-info me-1">Categoría: @GetCategoriaNombre(CategoriaFiltro.Value)</span>
+                    }
+                    @if (!string.IsNullOrEmpty(EstadoFiltro))
+                    {
+                        <span class="badge bg-success me-1">Estado: @(EstadoFiltro == "true" ? "Activos" : "Inactivos")</span>
+                    }
+                    @if (!string.IsNullOrEmpty(StockFiltro))
+                    {
+                        <span class="badge bg-warning me-1">Stock: @GetStockFiltroNombre()</span>
+                    }
+                    <button class="btn btn-link btn-sm p-0 ms-2" @onclick="ClearAllFilters">
+                        <i class="bi bi-x-circle"></i> Limpiar filtros
+                    </button>
+                </div>
+            }
+        </div>
+    </div>
+
+    <!-- Lista de Artículos -->
+    <div class="card shadow-sm">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="card-title mb-0">
+                <i class="bi bi-list me-2"></i>Lista de Artículos
+                @if (PaginatedArticulos?.TotalRegistros > 0)
+                {
+                    <span class="badge bg-secondary ms-2">@PaginatedArticulos.TotalRegistros</span>
+                }
+            </h5>
+            <div class="d-flex gap-2">
+                <select class="form-select form-select-sm" style="width: auto;" @onchange="OnPageSizeChanged">
+                    @foreach (var size in Constants.Paginacion.OpcionesPorPagina)
+                    {
+                        <option value="@size" selected="@(size == PageSize)">@size por página</option>
+                    }
+                </select>
+            </div>
+        </div>
+        <div class="card-body p-0">
+            @if (IsLoading)
+            {
+                <div class="text-center py-5">
+                    <div class="spinner-border me-2"></div>
+                    <span>Cargando artículos...</span>
+                </div>
+            }
+            else if (Articulos?.Any() == true)
+            {
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-dark">
+                            <tr>
+                                <th style="width: 100px;">Código</th>
+                                <th>Nombre</th>
+                                <th>Categoría</th>
+                                <th class="text-end" style="width: 120px;">Precio</th>
+                                <th class="text-center" style="width: 100px;">Stock</th>
+                                <th class="text-center" style="width: 80px;">Estado</th>
+                                <th class="text-center" style="width: 120px;">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var articulo in Articulos)
+                            {
+                                <tr class="@(articulo.StockBajo ? "table-warning" : "") @(!articulo.Activo ? "table-light" : "")">
+                                    <td>
+                                        <div class="d-flex align-items-center">
+                                            <strong>@articulo.Codigo</strong>
+                                            @if (articulo.StockBajo)
+                                            {
+                                                <i class="bi bi-exclamation-triangle text-warning ms-2" title="Stock bajo"></i>
+                                            }
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div>
+                                            <div class="fw-bold">@articulo.Nombre</div>
+                                            @if (!string.IsNullOrEmpty(articulo.Descripcion))
+                                            {
+                                                <small class="text-muted">@articulo.Descripcion</small>
+                                            }
+                                        </div>
+                                    </td>
+                                    <td>
+                                        @if (!string.IsNullOrEmpty(articulo.Categoria))
+                                        {
+                                            <span class="badge bg-info">@articulo.Categoria</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">Sin categoría</span>
+                                        }
+                                    </td>
+                                    <td class="text-end">
+                                        <CurrencyDisplay Value="@articulo.PrecioUnitario" ShowSymbol="true" />
+                                    </td>
+                                    <td class="text-center">
+                                        <span class="badge @GetStockBadgeClass(articulo.Stock)">
+                                            @articulo.Stock
+                                        </span>
+                                        @if (articulo.Stock <= articulo.StockMinimo && articulo.Stock > 0)
+                                        {
+                                            <br><small class="text-warning">Mín: @articulo.StockMinimo</small>
+                                        }
+                                    </td>
+                                    <td class="text-center">
+                                        <StatusBadge Status="@(articulo.Activo ? "Activo" : "Inactivo")" />
+                                    </td>
+                                    <td class="text-center">
+                                        <div class="btn-group btn-group-sm">
+                                            <button class="btn btn-outline-primary" 
+                                                    @onclick="() => VerArticulo(articulo.Id)" 
+                                                    title="Ver detalle">
+                                                <i class="bi bi-eye"></i>
+                                            </button>
+                                            <button class="btn btn-outline-secondary" 
+                                                    @onclick="() => EditarArticulo(articulo.Id)" 
+                                                    title="Editar">
+                                                <i class="bi bi-pencil"></i>
+                                            </button>
+                                            <button class="btn btn-outline-warning" 
+                                                    @onclick="() => EditarStock(articulo)" 
+                                                    title="Editar stock">
+                                                <i class="bi bi-box"></i>
+                                            </button>
+                                            @if (articulo.Activo)
+                                            {
+                                                <button class="btn btn-outline-danger" 
+                                                        @onclick="() => DesactivarArticulo(articulo)" 
+                                                        title="Desactivar">
+                                                    <i class="bi bi-toggle-on"></i>
+                                                </button>
+                                            }
+                                            else
+                                            {
+                                                <button class="btn btn-outline-success" 
+                                                        @onclick="() => ActivarArticulo(articulo)" 
+                                                        title="Activar">
+                                                    <i class="bi bi-toggle-off"></i>
+                                                </button>
+                                            }
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Paginación -->
+                @if (PaginatedArticulos != null && PaginatedArticulos.TotalPaginas > 1)
+                {
+                     <div class="card-footer">
+                    <Pagination TItem="ArticuloDto" 
+                              PaginationInfo="@PaginatedArticulos"
+                              OnPageChanged="@OnPageChanged"
+                              OnPageSizeChanged="@((e) => HandlePageSizeChanged(e))"
+                              CurrentPageSize="@PageSize"
+                              ShowInfo="true"
+                              ShowPageSizeSelector="false" />
+                </div>
+                }
+            }
+            else 
+            {
+                <div class="text-center py-5">
+                    <i class="bi bi-box-seam display-4 text-muted"></i>
+                    <h5 class="mt-3">No se encontraron artículos</h5>
+                    <p class="text-muted">
+                        @if (HasActiveFilters)
+                        {
+                            <span>No hay artículos que coincidan con los filtros aplicados.</span>
+                        }
+                        else
+                        {
+                            <span>Aún no hay artículos registrados en el sistema.</span>
+                        }
+                    </p>
+                    @if (!HasActiveFilters)
+                    {
+                        <button class="btn btn-primary" @onclick="CrearArticulo">
+                            <i class="bi bi-plus me-2"></i>Crear Primer Artículo
+                        </button>
+                    }
+                    else
+                    {
+                        <button class="btn btn-outline-secondary" @onclick="ClearAllFilters">
+                            <i class="bi bi-funnel me-2"></i>Limpiar Filtros
+                        </button>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+
+    <!-- Modal de Edición de Stock -->
+    @if (ShowStockModal && ArticuloParaEditarStock != null)
+    {
+        <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">
+                            <i class="bi bi-box me-2"></i>Editar Stock
+                        </h5>
+                        <button type="button" class="btn-close" @onclick="CerrarModalStock"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <strong>@ArticuloParaEditarStock.Nombre</strong>
+                            <small class="text-muted d-block">@ArticuloParaEditarStock.Codigo</small>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label">Stock Actual</label>
+                                    <input type="text" class="form-control" value="@ArticuloParaEditarStock.Stock" readonly />
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label">Nuevo Stock *</label>
+                                    <input type="number" class="form-control @(StockError ? "is-invalid" : "")" 
+                                           @bind="NuevoStock" min="0" />
+                                    @if (StockError)
+                                    {
+                                        <div class="invalid-feedback">El stock debe ser mayor o igual a 0</div>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="alert alert-info">
+                            <i class="bi bi-info-circle me-2"></i>
+                            <strong>Stock mínimo:</strong> @ArticuloParaEditarStock.StockMinimo unidades
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" @onclick="CerrarModalStock">Cancelar</button>
+                        <button type="button" class="btn btn-primary" @onclick="GuardarStock" disabled="@(IsSavingStock || StockError)">
+                            @if (IsSavingStock)
+                            {
+                                <span class="spinner-border spinner-border-sm me-1"></span>
+                            }
+                            else
+                            {
+                                <i class="bi bi-check me-1"></i>
+                            }
+                            Guardar Stock
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- Confirmación -->
+    <Confirm @ref="ConfirmDialog" />
+</div>
+
+<style>
+    .articulos-container {
+        padding: 1rem;
+    }
+
+    .page-header {
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        padding: 1.5rem;
+        border-radius: 0.5rem;
+        border-left: 4px solid var(--bs-primary);
+    }
+
+    .summary-card {
+        transition: transform 0.2s ease-in-out;
+    }
+
+    .summary-card:hover {
+        transform: translateY(-2px);
+    }
+
+    .summary-icon {
+        width: 50px;
+        height: 50px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.25rem;
+    }
+
+    .summary-number {
+        font-size: 1.75rem;
+        font-weight: 700;
+        margin-bottom: 0.25rem;
+    }
+
+    .table-warning {
+        --bs-table-bg: #fff3cd;
+        --bs-table-striped-bg: #f9ecb8;
+    }
+
+    .table-light {
+        --bs-table-bg: #f8f9fa;
+        --bs-table-striped-bg: #ecedee;
+        opacity: 0.7;
+    }
+
+    .card {
+        border: none;
+        box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    }
+
+    .card-header {
+        background-color: var(--bs-light);
+        border-bottom: 1px solid var(--bs-border-color);
+    }
+
+    .btn-group-sm .btn {
+        padding: 0.25rem 0.5rem;
+        font-size: 0.875rem;
+    }
+
+    @@media (max-width: 768px) {
+        .page-header {
+            padding: 1rem;
+        }
+
+        .summary-number {
+            font-size: 1.5rem;
+        }
+
+        .btn-group {
+            flex-direction: column;
+        }
+
+        .btn-group .btn {
+            border-radius: 0.375rem !important;
+            margin-bottom: 2px;
+        }
+    }
+</style>
+
+@code {
+    private Alert? AlertComponent;
+    private Confirm? ConfirmDialog;
+
+    private List<ArticuloDto>? Articulos;
+    private PaginacionDto<ArticuloDto>? PaginatedArticulos;
+    private List<CategoriaArticuloDto>? CategoriasDisponibles;
+
+    private bool IsLoading = true;
+    private int CurrentPage = 1;
+    private int PageSize = Constants.Paginacion.ElementosPorPaginaDefault;
+
+    // Filtros
+    private string SearchTerm = "";
+    private int? CategoriaFiltro;
+    private string EstadoFiltro = "";
+    private string StockFiltro = "";
+
+    // Métricas
+    private int TotalArticulos = 0;
+    private int ArticulosActivos = 0;
+    private int ArticulosStockBajo = 0;
+    private int TotalCategorias = 0;
+
+    // Modal de stock
+    private bool ShowStockModal = false;
+    private bool IsSavingStock = false;
+    private bool StockError = false;
+    private ArticuloDto? ArticuloParaEditarStock;
+    private int NuevoStock = 0;
+
+    private bool HasActiveFilters => !string.IsNullOrEmpty(SearchTerm) || 
+                                     CategoriaFiltro.HasValue || 
+                                     !string.IsNullOrEmpty(EstadoFiltro) || 
+                                     !string.IsNullOrEmpty(StockFiltro);
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        await Task.WhenAll(
+            LoadCategorias(),
+            LoadArticulos(),
+            LoadMetricas()
+        );
+    }
+
+    private async Task LoadCategorias()
+    {
+        try
+        {
+            var result = await CategoriaService.GetAll();
+            if (result.Success && result.Data != null)
+            {
+                CategoriasDisponibles = result.Data.Where(c => c.Activo).ToList();
+                TotalCategorias = CategoriasDisponibles.Count;
+            }
+        }
+        catch (Exception)
+        {
+            CategoriasDisponibles = new List<CategoriaArticuloDto>();
+        }
+    }
+
+    private async Task LoadArticulos()
+    {
+        try
+        {
+            IsLoading = true;
+            StateHasChanged();
+
+            bool? estadoFiltroValue = null;
+            if (!string.IsNullOrEmpty(EstadoFiltro))
+            {
+                estadoFiltroValue = EstadoFiltro == "true";
+            }
+
+            var result = await ArticuloService.GetPaginated(
+                CurrentPage, 
+                PageSize, 
+                SearchTerm, 
+                CategoriaFiltro);
+
+            if (result.Success && result.Data != null)
+            {
+                PaginatedArticulos = result.Data;
+                Articulos = result.Data.Lista?.ToList() ?? new List<ArticuloDto>();
+
+                // Aplicar filtros adicionales que no se manejan en la API
+                if (!string.IsNullOrEmpty(EstadoFiltro))
+                {
+                    var estado = EstadoFiltro == "true";
+                    Articulos = Articulos.Where(a => a.Activo == estado).ToList();
+                }
+
+                if (!string.IsNullOrEmpty(StockFiltro))
+                {
+                    Articulos = StockFiltro switch
+                    {
+                        "disponible" => Articulos.Where(a => a.Stock > 0).ToList(),
+                        "bajo" => Articulos.Where(a => a.Stock <= a.StockMinimo && a.Stock > 0).ToList(),
+                        "agotado" => Articulos.Where(a => a.Stock == 0).ToList(),
+                        _ => Articulos
+                    };
+                }
+            }
+            else
+            {
+                Articulos = new List<ArticuloDto>();
+                AlertComponent?.Show(
+                    result.Message ?? "Error al cargar los artículos",
+                    AlertType.Warning,
+                    "Advertencia"
+                );
+            }
+        }
+        catch (Exception ex)
+        {
+            Articulos = new List<ArticuloDto>();
+            AlertComponent?.Show(
+                $"Error al cargar artículos: {ex.Message}",
+                AlertType.Danger,
+                "Error"
+            );
+        }
+        finally
+        {
+            IsLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadMetricas()
+    {
+        try
+        {
+            var result = await ArticuloService.GetAll();
+            if (result.Success && result.Data != null)
+            {
+                var articulos = result.Data;
+                TotalArticulos = articulos.Count;
+                ArticulosActivos = articulos.Count(a => a.Activo);
+                ArticulosStockBajo = articulos.Count(a => a.Stock <= a.StockMinimo && a.Stock > 0);
+            }
+        }
+        catch (Exception)
+        {
+            // Manejar error silenciosamente
+        }
+    }
+
+    private async Task RefreshData()
+    {
+        CurrentPage = 1;
+        await LoadData();
+    }
+
+    private async Task ApplyFilters()
+    {
+        CurrentPage = 1;
+        await LoadArticulos();
+    }
+
+    private async Task ClearSearch()
+    {
+        SearchTerm = "";
+        await ApplyFilters();
+    }
+
+    private async Task ClearAllFilters()
+    {
+        SearchTerm = "";
+        CategoriaFiltro = null;
+        EstadoFiltro = "";
+        StockFiltro = "";
+        await ApplyFilters();
+    }
+
+    private async Task OnSearchKeyPress(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await ApplyFilters();
+        }
+    }
+
+    private async Task OnPageChanged(int newPage)
+    {
+        CurrentPage = newPage;
+        await LoadArticulos();
+    }
+
+     private Task HandlePageSizeChanged(object value)
+    {
+        if (value is ChangeEventArgs changeArgs && 
+            int.TryParse(changeArgs.Value?.ToString(), out int newSize))
+        {
+            PageSize = newSize;
+            CurrentPage = 1;
+            return LoadArticulos();
+        }
+        return Task.CompletedTask;
+    }
+
+    private async Task OnPageSizeChanged(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out int newSize))
+        {
+            PageSize = newSize;
+            CurrentPage = 1;
+            await LoadArticulos();
+        }
+    }
+
+    private void CrearArticulo()
+    {
+        Navigation.NavigateTo("/articulos/crear");
+    }
+
+    private void VerArticulo(int articuloId)
+    {
+        Navigation.NavigateTo($"/articulos/{articuloId}");
+    }
+
+    private void EditarArticulo(int articuloId)
+    {
+        Navigation.NavigateTo($"/articulos/editar/{articuloId}");
+    }
+
+    private void EditarStock(ArticuloDto articulo)
+    {
+        ArticuloParaEditarStock = articulo;
+        NuevoStock = articulo.Stock;
+        StockError = false;
+        ShowStockModal = true;
+    }
+
+    private void CerrarModalStock()
+    {
+        ShowStockModal = false;
+        ArticuloParaEditarStock = null;
+        NuevoStock = 0;
+        StockError = false;
+    }
+
+    private async Task GuardarStock()
+    {
+        if (ArticuloParaEditarStock == null || NuevoStock < 0)
+        {
+            StockError = true;
+            return;
+        }
+
+        try
+        {
+            IsSavingStock = true;
+            StateHasChanged();
+
+            var result = await ArticuloService.ActualizarStock(ArticuloParaEditarStock.Id, NuevoStock);
+            if (result.Success)
+            {
+                AlertComponent?.Show(
+                    $"Stock actualizado exitosamente para {ArticuloParaEditarStock.Nombre}",
+                    AlertType.Success,
+                    "Stock Actualizado"
+                );
+
+                // Actualizar el stock en la lista local
+                ArticuloParaEditarStock.Stock = NuevoStock;
+                CerrarModalStock();
+                await LoadMetricas();
+            }
+            else
+            {
+                AlertComponent?.Show(
+                    result.Message ?? "Error al actualizar el stock",
+                    AlertType.Danger,
+                    "Error"
+                );
+            }
+        }
+        catch (Exception ex)
+        {
+            AlertComponent?.Show(
+                $"Error al guardar: {ex.Message}",
+                AlertType.Danger,
+                "Error"
+            );
+        }
+        finally
+        {
+            IsSavingStock = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task ActivarArticulo(ArticuloDto articulo)
+    {
+        if (ConfirmDialog != null)
+        {
+            var confirmed = await ConfirmDialog.ShowAsync(
+                "Activar Artículo",
+                $"¿Está seguro que desea activar el artículo {articulo.Nombre}?",
+                ConfirmType.Success
+            );
+
+            if (confirmed)
+            {
+                await ToggleArticuloEstado(articulo, true);
+            }
+        }
+    }
+
+    private async Task DesactivarArticulo(ArticuloDto articulo)
+    {
+        if (ConfirmDialog != null)
+        {
+            var confirmed = await ConfirmDialog.ShowAsync(
+                "Desactivar Artículo",
+                $"¿Está seguro que desea desactivar el artículo {articulo.Nombre}? No estará disponible para nuevas facturas.",
+                ConfirmType.Warning
+            );
+
+            if (confirmed)
+            {
+                await ToggleArticuloEstado(articulo, false);
+            }
+        }
+    }
+
+    private async Task ToggleArticuloEstado(ArticuloDto articulo, bool nuevoEstado)
+    {
+        try
+        {
+            articulo.Activo = nuevoEstado;
+            var result = await ArticuloService.Update(articulo.Id, articulo);
+            
+            if (result.Success)
+            {
+                AlertComponent?.Show(
+                    $"Artículo {(nuevoEstado ? "activado" : "desactivado")} exitosamente",
+                    AlertType.Success,
+                    "Estado Actualizado"
+                );
+                await LoadMetricas();
+            }
+            else
+            {
+                // Revertir el cambio si falla
+                articulo.Activo = !nuevoEstado;
+                AlertComponent?.Show(
+                    result.Message ?? "Error al cambiar el estado del artículo",
+                    AlertType.Danger,
+                    "Error"
+                );
+            }
+        }
+        catch (Exception ex)
+        {
+            // Revertir el cambio si falla
+            articulo.Activo = !nuevoEstado;
+            AlertComponent?.Show(
+                $"Error al cambiar estado: {ex.Message}",
+                AlertType.Danger,
+                "Error"
+            );
+        }
+        
+        StateHasChanged();
+    }
+
+    private string GetStockBadgeClass(int stock)
+    {
+        return stock switch
+        {
+            0 => "bg-danger",
+            <= 5 => "bg-warning",
+            _ => "bg-success"
+        };
+    }
+
+    private string GetCategoriaNombre(int categoriaId)
+    {
+        return CategoriasDisponibles?.FirstOrDefault(c => c.Id == categoriaId)?.Nombre ?? "Desconocida";
+    }
+
+    private string GetStockFiltroNombre()
+    {
+        return StockFiltro switch
+        {
+            "disponible" => "Con stock",
+            "bajo" => "Stock bajo",
+            "agotado" => "Agotado",
+            _ => ""
+        };
+    }
+}

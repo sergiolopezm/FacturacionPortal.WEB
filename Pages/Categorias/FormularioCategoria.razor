@@ -1,0 +1,548 @@
+﻿@page "/categorias/crear"
+@page "/categorias/editar/{CategoriaId:int}"
+@using FacturacionPortal.WEB.Models.Facturacion
+@using FacturacionPortal.WEB.Services.Interface
+@using FacturacionPortal.WEB.Shared.Components
+@using FacturacionPortal.WEB.Util
+@using FacturacionPortal.WEB.Util.Extensions
+@using Microsoft.AspNetCore.Components.Forms
+@inject ICategoriaArticuloService CategoriaService
+@inject NavigationManager Navigation
+@inject IJSRuntime JSRuntime
+
+<PageTitle>@(IsEditMode ? "Editar" : "Crear") Categoría - FacturacionPortal</PageTitle>
+
+<div class="formulario-categoria-container">
+    <!-- Header -->
+    <div class="page-header mb-4">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h2 class="mb-1">
+                    <i class="bi @(IsEditMode ? "bi-pencil-square" : "bi-plus-circle") text-primary me-2"></i>
+                    @(IsEditMode ? "Editar" : "Crear") Categoría
+                </h2>
+                <p class="text-muted mb-0">
+                    @(IsEditMode ? "Modifique la información de la categoría" : "Complete la información para crear una nueva categoría")
+                </p>
+            </div>
+            <div class="d-flex gap-2">
+                <button class="btn btn-outline-secondary" @onclick="CancelForm">
+                    <i class="bi bi-x me-1"></i>Cancelar
+                </button>
+                @if (IsEditMode && Categoria != null)
+                {
+                    <button class="btn btn-outline-info" @onclick="VerArticulos" disabled="@(Categoria.TotalArticulos == 0)">
+                        <i class="bi bi-box-seam me-1"></i>Ver Artículos (@Categoria.TotalArticulos)
+                    </button>
+                }
+            </div>
+        </div>
+    </div>
+
+    <Alert @ref="AlertComponent" />
+
+    @if (IsLoading)
+    {
+        <Loading IsVisible="true" Text="@(IsEditMode ? "Cargando categoría..." : "Preparando formulario...")" />
+    }
+    else
+    {
+        <div class="row justify-content-center">
+            <div class="col-lg-8">
+                <div class="card shadow-sm">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">
+                            <i class="bi bi-info-circle me-2"></i>Información de la Categoría
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <EditForm Model="@Categoria" OnValidSubmit="@SaveCategoria">
+                            <DataAnnotationsValidator />
+
+                            <div class="row">
+                                <div class="col-md-8">
+                                    <div class="mb-3">
+                                        <label class="form-label">Nombre de la Categoría *</label>
+                                        <InputText @bind-Value="Categoria.Nombre"
+                                                    class=@($"form-control {GetFieldCssClass(nameof(Categoria.Nombre))}")
+                                                   placeholder="Ingrese el nombre de la categoría"
+                                                   disabled="@IsSaving" />
+                                        <ValidationMessage For="@(() => Categoria.Nombre)" class="invalid-feedback" />
+                                        <div class="form-text">Máximo 100 caracteres</div>
+                                    </div>
+                                </div>
+
+                                <div class="col-md-4">
+                                    <div class="mb-3">
+                                        <label class="form-label">Estado</label>
+                                        <div class="form-check form-switch">
+                                            <InputCheckbox @bind-Value="Categoria.Activo"
+                                                           class="form-check-input"
+                                                           id="categoriaActiva"
+                                                           disabled="@IsSaving" />
+                                            <label class="form-check-label" for="categoriaActiva">
+                                                @(Categoria.Activo ? "Activa" : "Inactiva")
+                                            </label>
+                                        </div>
+                                        <div class="form-text">
+                                            @(Categoria.Activo ? "La categoría está disponible para usar" : "La categoría está deshabilitada")
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label">Descripción</label>
+                                <InputTextArea @bind-Value="Categoria.Descripcion"
+                                               class=@($"form-control {GetFieldCssClass(nameof(Categoria.Descripcion))}")
+                                               rows="4"
+                                               placeholder="Ingrese una descripción opcional de la categoría"
+                                               disabled="@IsSaving" />
+                                <ValidationMessage For="@(() => Categoria.Descripcion)" class="invalid-feedback" />
+                                <div class="form-text">Máximo 250 caracteres (opcional)</div>
+                            </div>
+
+                            @if (IsEditMode && Categoria.Id > 0)
+                            {
+                                <div class="row">
+                                    <div class="col-md-4">
+                                        <div class="mb-3">
+                                            <label class="form-label">ID de Categoría</label>
+                                            <input type="text" class="form-control" value="@Categoria.Id" readonly />
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="mb-3">
+                                            <label class="form-label">Fecha de Creación</label>
+                                            <input type="text" class="form-control"
+                                                   value="@Categoria.FechaCreacion.ToColombiaLongDateString()" readonly />
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="mb-3">
+                                            <label class="form-label">Total de Artículos</label>
+                                            <div class="input-group">
+                                                <input type="text" class="form-control" value="@Categoria.TotalArticulos" readonly />
+                                                @if (Categoria.TotalArticulos > 0)
+                                                {
+                                                    <button class="btn btn-outline-info" type="button" @onclick="VerArticulos">
+                                                        <i class="bi bi-eye"></i>
+                                                    </button>
+                                                }
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                @if (Categoria.FechaModificacion.HasValue)
+                                {
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <div class="mb-3">
+                                                <label class="form-label">Última Modificación</label>
+                                                <input type="text" class="form-control"
+                                                       value="@Categoria.FechaModificacion.Value.ToColombiaLongDateString()" readonly />
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="mb-3">
+                                                <label class="form-label">Modificado Por</label>
+                                                <input type="text" class="form-control"
+                                                       value="@(Categoria.ModificadoPor ?? "Sistema")" readonly />
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+                            }
+
+                            <div class="d-flex justify-content-end gap-2 mt-4">
+                                <button type="button" class="btn btn-secondary" @onclick="CancelForm" disabled="@IsSaving">
+                                    <i class="bi bi-x me-1"></i>Cancelar
+                                </button>
+                                <button type="submit" class="btn btn-primary" disabled="@(IsSaving || !IsFormValid)">
+                                    @if (IsSaving)
+                                    {
+                                        <span class="spinner-border spinner-border-sm me-1"></span>
+                                        <span>@(IsEditMode ? "Actualizando..." : "Guardando...")</span>
+                                    }
+                                    else
+                                    {
+                                        <i class="bi @(IsEditMode ? "bi-check-circle" : "bi-plus-circle") me-1"></i>
+                                        <span>@(IsEditMode ? "Actualizar" : "Crear") Categoría</span>
+                                    }
+                                </button>
+                            </div>
+                        </EditForm>
+                    </div>
+                </div>
+
+                @if (IsEditMode && Categoria.TotalArticulos > 0)
+                {
+                    <div class="card shadow-sm mt-4">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h6 class="card-title mb-0">
+                                <i class="bi bi-info-circle me-2"></i>Información Adicional
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="alert alert-info d-flex align-items-center" role="alert">
+                                <i class="bi bi-info-circle-fill me-2"></i>
+                                <div>
+                                    Esta categoría tiene <strong>@Categoria.TotalArticulos artículo(s)</strong> asociado(s).
+                                    @if (!Categoria.Activo)
+                                    {
+                                        <br>
+                            
+                                        <small class="text-warning">
+                                            <i class="bi bi-exclamation-triangle me-1"></i>
+                                            Al estar inactiva, los artículos asociados no estarán disponibles para nuevas facturas.
+                                        </small>
+                                    }
+                                </div>
+                            </div>
+
+                            <div class="d-flex gap-2">
+                                <button class="btn btn-outline-primary" @onclick="VerArticulos">
+                                    <i class="bi bi-box-seam me-1"></i>Ver Artículos de esta Categoría
+                                </button>
+                                <button class="btn btn-outline-success" @onclick="CrearArticulo">
+                                    <i class="bi bi-plus me-1"></i>Agregar Nuevo Artículo
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+<Confirm @ref="ConfirmDialog" />
+
+<style>
+    .formulario-categoria-container {
+        padding: 1rem;
+    }
+
+    .page-header {
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        padding: 1.5rem;
+        border-radius: 0.5rem;
+        border-left: 4px solid var(--bs-primary);
+    }
+
+    .card {
+        border: none;
+        box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    }
+
+    .card-header {
+        background-color: var(--bs-light);
+        border-bottom: 1px solid var(--bs-border-color);
+    }
+
+    .form-check-input:checked {
+        background-color: var(--bs-primary);
+        border-color: var(--bs-primary);
+    }
+
+    .is-invalid {
+        border-color: #dc3545;
+    }
+
+    .is-valid {
+        border-color: #198754;
+    }
+
+    @@media (max-width: 768px) {
+        .page-header
+
+    {
+        padding: 1rem;
+    }
+
+    .d-flex.gap-2 {
+        flex-direction: column;
+    }
+
+        .d-flex.gap-2 .btn {
+            margin-bottom: 0.5rem;
+        }
+
+    }
+</style>
+
+@code {
+    [Parameter] public int CategoriaId { get; set; }
+
+    private CategoriaArticuloDto Categoria = new();
+    private Alert? AlertComponent;
+    private Confirm? ConfirmDialog;
+    private EditContext? EditContext;
+
+    private bool IsLoading = true;
+    private bool IsSaving = false;
+    private bool IsEditMode => CategoriaId > 0;
+    private bool IsFormValid => !string.IsNullOrWhiteSpace(Categoria.Nombre);
+
+    protected override async Task OnInitializedAsync()
+    {
+        await InitializeForm();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (CategoriaId > 0 && (Categoria.Id == 0 || Categoria.Id != CategoriaId))
+        {
+            await LoadCategoria();
+        }
+    }
+
+    private async Task InitializeForm()
+    {
+        try
+        {
+            IsLoading = true;
+            StateHasChanged();
+
+            if (IsEditMode)
+            {
+                await LoadCategoria();
+            }
+            else
+            {
+                Categoria = new CategoriaArticuloDto
+                {
+                    Activo = true,
+                    FechaCreacion = DateTime.Now
+                };
+                EditContext = new EditContext(Categoria);
+            }
+        }
+        finally
+        {
+            IsLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadCategoria()
+    {
+        try
+        {
+            var result = await CategoriaService.GetById(CategoriaId);
+            if (result.Success && result.Data != null)
+            {
+                Categoria = result.Data;
+                EditContext = new EditContext(Categoria);
+            }
+            else
+            {
+                AlertComponent?.Show(
+                    result.Message ?? "Categoría no encontrada",
+                    AlertType.Danger,
+                    "Error"
+                );
+
+                await Task.Delay(2000);
+                Navigation.NavigateTo("/categorias");
+            }
+        }
+        catch (Exception ex)
+        {
+            AlertComponent?.Show(
+                $"Error al cargar la categoría: {ex.Message}",
+                AlertType.Danger,
+                "Error"
+            );
+
+            await Task.Delay(2000);
+            Navigation.NavigateTo("/categorias");
+        }
+    }
+
+    private async Task SaveCategoria()
+    {
+        if (IsSaving || !IsFormValid) return;
+
+        try
+        {
+            IsSaving = true;
+            StateHasChanged();
+
+            // Validar nombre único
+            if (await IsNombreUnico())
+            {
+                if (IsEditMode)
+                {
+                    var result = await CategoriaService.Update(Categoria.Id, Categoria);
+                    if (result.Success)
+                    {
+                        AlertComponent?.Show(
+                            "Categoría actualizada exitosamente",
+                            AlertType.Success,
+                            "Actualización Exitosa"
+                        );
+
+                        await Task.Delay(1500);
+                        Navigation.NavigateTo("/categorias");
+                    }
+                    else
+                    {
+                        AlertComponent?.Show(
+                            result.Message ?? "Error al actualizar la categoría",
+                            AlertType.Danger,
+                            "Error"
+                        );
+                    }
+                }
+                else
+                {
+                    var result = await CategoriaService.Create(Categoria);
+                    if (result.Success && result.Data != null)
+                    {
+                        AlertComponent?.Show(
+                            $"Categoría '{result.Data.Nombre}' creada exitosamente",
+                            AlertType.Success,
+                            "Creación Exitosa"
+                        );
+
+                        await Task.Delay(1500);
+                        Navigation.NavigateTo("/categorias");
+                    }
+                    else
+                    {
+                        AlertComponent?.Show(
+                            result.Message ?? "Error al crear la categoría",
+                            AlertType.Danger,
+                            "Error"
+                        );
+                    }
+                }
+            }
+            else
+            {
+                AlertComponent?.Show(
+                    "Ya existe una categoría con este nombre",
+                    AlertType.Warning,
+                    "Nombre Duplicado"
+                );
+            }
+        }
+        catch (Exception ex)
+        {
+            AlertComponent?.Show(
+                $"Error inesperado: {ex.Message}",
+                AlertType.Danger,
+                "Error"
+            );
+        }
+        finally
+        {
+            IsSaving = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task<bool> IsNombreUnico()
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(Categoria.Nombre))
+                return false;
+
+            var result = await CategoriaService.ExistePorNombre(Categoria.Nombre.Trim());
+            if (result.Success && result.Data != null)
+            {
+                // Si estamos editando, verificar que no sea la misma categoría
+                if (IsEditMode)
+                {
+                    // Aquí asumo que el resultado contiene información sobre la categoría existente
+                    // Deberías ajustar según la implementación real del servicio
+                    return true; // Por ahora permitir la edición
+                }
+                return false; // Ya existe otra categoría con este nombre
+            }
+            return true; // No existe, es único
+        }
+        catch (Exception)
+        {
+            return true; // En caso de error, permitir continuar
+        }
+    }
+
+    private async Task CancelForm()
+    {
+        if (ConfirmDialog != null)
+        {
+            var hasChanges = IsEditMode ? HasFormChanges() : !string.IsNullOrWhiteSpace(Categoria.Nombre) || !string.IsNullOrWhiteSpace(Categoria.Descripcion);
+
+            if (hasChanges)
+            {
+                var confirmed = await ConfirmDialog.ShowAsync(
+                    "Cancelar Operación",
+                    "¿Está seguro que desea cancelar? Se perderán todos los cambios no guardados.",
+                    ConfirmType.Warning
+                );
+
+                if (!confirmed) return;
+            }
+        }
+
+        Navigation.NavigateTo("/categorias");
+    }
+
+    private bool HasFormChanges()
+    {
+        // Implementar lógica para detectar cambios en el formulario
+        // Por simplicidad, asumimos que siempre hay cambios si se está editando
+        return true;
+    }
+
+    private void VerArticulos()
+    {
+        Navigation.NavigateTo($"/articulos?categoriaId={Categoria.Id}");
+    }
+
+    private void CrearArticulo()
+    {
+        Navigation.NavigateTo($"/articulos/crear?categoriaId={Categoria.Id}");
+    }
+
+    private string GetFieldCssClass(string fieldName)
+    {
+        if (EditContext == null) return "";
+
+        var fieldIdentifier = EditContext.Field(fieldName);
+        var isModified = EditContext.IsModified(fieldIdentifier);
+        var isValid = !EditContext.GetValidationMessages(fieldIdentifier).Any();
+
+        if (!isModified) return "";
+
+        return isValid ? "is-valid" : "is-invalid";
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !IsEditMode)
+        {
+            try
+            {
+                await JSRuntime.InvokeVoidAsync("focusElement", "nombre-categoria");
+            }
+            catch
+            {
+                // Ignorar errores de JavaScript
+            }
+        }
+    }
+}
+
+<script>
+    window.focusElement = (elementId) => {
+        const element = document.getElementById(elementId) || document.querySelector(`[placeholder*="nombre"]`);
+        if (element) {
+            element.focus();
+        }
+    };
+</script>

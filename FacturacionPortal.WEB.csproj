@@ -16,11 +16,4 @@
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.11.0" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Folder Include="Pages\Clientes\" />
-    <Folder Include="Pages\Articulos\" />
-    <Folder Include="Pages\Categorias\" />
-    <Folder Include="Pages\Reportes\" />
-  </ItemGroup>
-
 </Project>

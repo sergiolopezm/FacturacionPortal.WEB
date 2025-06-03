@@ -7,7 +7,7 @@ namespace FacturacionPortal.WEB.Services.Interface
     /// </summary>
     public interface IAuthService
     {
-        Task<(bool Success, string Message, TokenDto? Data)> Login(UsuarioLoginDto loginDto);
+        Task<(bool Success, string? Message, LoginResponseDto? Data)> Login(UsuarioLoginDto model);
         Task<(bool Success, string Message, UsuarioPerfilDto? Data)> GetProfile();
         Task<(bool Success, string Message)> Logout();
         Task<bool> IsAuthenticated();
