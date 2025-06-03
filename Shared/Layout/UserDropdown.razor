@@ -1,0 +1,313 @@
+﻿@using Microsoft.AspNetCore.Components.Authorization
+@using FacturacionPortal.WEB.Models.Auth
+@using FacturacionPortal.WEB.Services.Interface
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IAuthService AuthService
+@inject NavigationManager Navigation
+@inject IJSRuntime JSRuntime
+
+<div class="user-dropdown dropdown">
+    <AuthorizeView>
+        <Authorized>
+            <button class="btn btn-link dropdown-toggle user-dropdown-toggle p-0"
+                    type="button"
+                    data-bs-toggle="dropdown"
+                    aria-expanded="false"
+                    title="Opciones de usuario">
+
+                <div class="d-flex align-items-center">
+                    <div class="user-avatar me-2">
+                        @if (!string.IsNullOrEmpty(AvatarUrl))
+                        {
+                            <img src="@AvatarUrl" alt="Avatar" class="rounded-circle" width="32" height="32" />
+                        }
+                        else
+                        {
+                            <div class="avatar-placeholder rounded-circle d-flex align-items-center justify-content-center">
+                                <i class="bi bi-person-fill"></i>
+                            </div>
+                        }
+                    </div>
+
+                    @if (ShowUserName)
+                    {
+                        <div class="user-info d-none d-md-block">
+                            <div class="user-name">@GetDisplayName()</div>
+                            @if (ShowRole && !string.IsNullOrEmpty(CurrentUser?.Rol))
+                            {
+                                <small class="user-role text-muted">@CurrentUser.Rol</small>
+                            }
+                        </div>
+                    }
+
+                    <i class="bi bi-chevron-down ms-1"></i>
+                </div>
+            </button>
+
+            <ul class="dropdown-menu dropdown-menu-end @DropdownClass">
+                @if (ShowUserInfo)
+                {
+                    <li class="dropdown-header">
+                        <div class="d-flex align-items-center">
+                            <div class="user-avatar me-2">
+                                @if (!string.IsNullOrEmpty(AvatarUrl))
+                                {
+                                    <img src="@AvatarUrl" alt="Avatar" class="rounded-circle" width="40" height="40" />
+                                }
+                                else
+                                {
+                                    <div class="avatar-placeholder-lg rounded-circle d-flex align-items-center justify-content-center">
+                                        <i class="bi bi-person-fill"></i>
+                                    </div>
+                                }
+                            </div>
+                            <div class="user-details">
+                                <div class="fw-bold">@GetDisplayName()</div>
+                                <small class="text-muted">@CurrentUser?.Email</small>
+                                @if (!string.IsNullOrEmpty(CurrentUser?.Rol))
+                                {
+                                    <div><small class="badge bg-secondary">@CurrentUser.Rol</small></div>
+                                }
+                            </div>
+                        </div>
+                    </li>
+                    <li><hr class="dropdown-divider"></li>
+                }
+
+                @if (ShowProfileOption)
+                {
+                    <li>
+                        <a class="dropdown-item" href="/perfil" @onclick="GoToProfile">
+                            <i class="bi bi-person me-2"></i>Mi Perfil
+                        </a>
+                    </li>
+                }
+
+                @if (ShowSettingsOption)
+                {
+                    <li>
+                        <a class="dropdown-item" href="/configuracion" @onclick="GoToSettings">
+                            <i class="bi bi-gear me-2"></i>Configuración
+                        </a>
+                    </li>
+                }
+
+                @if (AdditionalMenuItems != null)
+                {
+                    @AdditionalMenuItems
+                }
+
+                @if (ShowDividerBeforeLogout)
+                {
+                    <li><hr class="dropdown-divider"></li>
+                }
+
+                <li>
+                    <button class="dropdown-item" @onclick="Logout" disabled="@IsLoggingOut">
+                        @if (IsLoggingOut)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2"></span>
+                        }
+                        else
+                        {
+                            <i class="bi bi-box-arrow-right me-2"></i>
+                        }
+                        Cerrar Sesión
+                    </button>
+                </li>
+            </ul>
+        </Authorized>
+
+        <NotAuthorized>
+            <div class="d-flex align-items-center gap-2">
+                <a href="/login" class="btn btn-outline-primary btn-sm">
+                    <i class="bi bi-box-arrow-in-right me-1"></i>Iniciar Sesión
+                </a>
+            </div>
+        </NotAuthorized>
+    </AuthorizeView>
+</div>
+
+<style>
+    .user-dropdown-toggle {
+        border: none !important;
+        color: inherit !important;
+        text-decoration: none !important;
+    }
+
+        .user-dropdown-toggle:hover,
+        .user-dropdown-toggle:focus {
+            color: inherit !important;
+            text-decoration: none !important;
+            background-color: rgba(0,0,0,0.1) !important;
+        }
+
+    .avatar-placeholder {
+        width: 32px;
+        height: 32px;
+        background-color: var(--bs-secondary);
+        color: white;
+        font-size: 14px;
+    }
+
+    .avatar-placeholder-lg {
+        width: 40px;
+        height: 40px;
+        background-color: var(--bs-secondary);
+        color: white;
+        font-size: 16px;
+    }
+
+    .user-name {
+        font-size: 0.875rem;
+        font-weight: 500;
+        line-height: 1.2;
+    }
+
+    .user-role {
+        font-size: 0.75rem;
+        line-height: 1;
+    }
+
+    .dropdown-header {
+        padding: 0.75rem 1rem;
+        background-color: var(--bs-light);
+    }
+
+    .user-details {
+        min-width: 0;
+        flex: 1;
+    }
+
+        .user-details .fw-bold {
+            font-size: 0.875rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+    .dropdown-item {
+        display: flex;
+        align-items: center;
+        padding: 0.5rem 1rem;
+    }
+
+        .dropdown-item:disabled {
+            opacity: 0.6;
+            pointer-events: none;
+        }
+
+    @@media (max-width: 768px) {
+        .user-info {
+            display: none !important;
+        }
+    }
+</style>
+
+@code {
+    [Parameter] public string? AvatarUrl { get; set; }
+    [Parameter] public bool ShowUserName { get; set; } = true;
+    [Parameter] public bool ShowRole { get; set; } = true;
+    [Parameter] public bool ShowUserInfo { get; set; } = true;
+    [Parameter] public bool ShowProfileOption { get; set; } = true;
+    [Parameter] public bool ShowSettingsOption { get; set; } = false;
+    [Parameter] public bool ShowDividerBeforeLogout { get; set; } = true;
+    [Parameter] public string DropdownClass { get; set; } = "";
+    [Parameter] public RenderFragment? AdditionalMenuItems { get; set; }
+    [Parameter] public EventCallback OnLogout { get; set; }
+    [Parameter] public EventCallback OnProfileClick { get; set; }
+    [Parameter] public EventCallback OnSettingsClick { get; set; }
+
+    private UsuarioPerfilDto? CurrentUser;
+    private bool IsLoggingOut = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadCurrentUser();
+    }
+
+    private async Task LoadCurrentUser()
+    {
+        try
+        {
+            var result = await AuthService.GetProfile();
+            if (result.Success && result.Data != null)
+            {
+                CurrentUser = result.Data;
+            }
+        }
+        catch (Exception)
+        {
+            // Error silencioso - el usuario podría no estar autenticado
+        }
+    }
+
+    private string GetDisplayName()
+    {
+        if (CurrentUser == null)
+            return "Usuario";
+
+        return !string.IsNullOrEmpty(CurrentUser.NombreCompleto)
+            ? CurrentUser.NombreCompleto
+            : CurrentUser.NombreUsuario;
+    }
+
+    private async Task Logout()
+    {
+        if (IsLoggingOut) return;
+
+        try
+        {
+            IsLoggingOut = true;
+            StateHasChanged();
+
+            var result = await AuthService.Logout();
+
+            if (OnLogout.HasDelegate)
+            {
+                await OnLogout.InvokeAsync();
+            }
+
+            Navigation.NavigateTo("/login", forceLoad: true);
+        }
+        catch (Exception)
+        {
+            // En caso de error, navegar al login de todas formas
+            Navigation.NavigateTo("/login", forceLoad: true);
+        }
+        finally
+        {
+            IsLoggingOut = false;
+        }
+    }
+
+    private async Task GoToProfile()
+    {
+        if (OnProfileClick.HasDelegate)
+        {
+            await OnProfileClick.InvokeAsync();
+        }
+        else
+        {
+            Navigation.NavigateTo("/perfil");
+        }
+    }
+
+    private async Task GoToSettings()
+    {
+        if (OnSettingsClick.HasDelegate)
+        {
+            await OnSettingsClick.InvokeAsync();
+        }
+        else
+        {
+            Navigation.NavigateTo("/configuracion");
+        }
+    }
+
+    public async Task RefreshUser()
+    {
+        await LoadCurrentUser();
+        StateHasChanged();
+    }
+}

@@ -1,0 +1,244 @@
+﻿@typeparam T where T : class
+@using FacturacionPortal.WEB.Models.Common
+
+<div class="table-container @ContainerClass">
+    @if (ShowHeader && !string.IsNullOrEmpty(Title))
+    {
+        <div class="table-header d-flex justify-content-between align-items-center mb-3">
+            <h5 class="mb-0">@Title</h5>
+            @if (HeaderContent != null)
+            {
+                <div class="table-header-actions">
+                    @HeaderContent
+                </div>
+            }
+        </div>
+    }
+
+    @if (ShowSearch)
+    {
+        <div class="table-search mb-3">
+            <div class="row g-2">
+                <div class="col-md-6">
+                    <div class="input-group">
+                        <span class="input-group-text">
+                            <i class="bi bi-search"></i>
+                        </span>
+                        <input type="text" class="form-control" placeholder="@SearchPlaceholder"
+                               @bind="SearchTerm" @bind:event="oninput" @onkeypress="OnSearchKeyPress" />
+                        @if (!string.IsNullOrEmpty(SearchTerm))
+                        {
+                            <button class="btn btn-outline-secondary" type="button" @onclick="ClearSearch">
+                                <i class="bi bi-x"></i>
+                            </button>
+                        }
+                    </div>
+                </div>
+                @if (SearchFilters != null)
+                {
+                    <div class="col-md-6">
+                        @SearchFilters
+                    </div>
+                }
+            </div>
+        </div>
+    }
+
+    @if (IsLoading)
+    {
+        <div class="text-center py-4">
+            <div class="spinner-border" role="status">
+                <span class="visually-hidden">Cargando...</span>
+            </div>
+            <div class="mt-2">@LoadingMessage</div>
+        </div>
+    }
+    else if (Items == null || !Items.Any())
+    {
+        <div class="text-center py-4">
+            <i class="bi bi-inbox display-4 text-muted"></i>
+            <div class="mt-2 text-muted">@EmptyMessage</div>
+            @if (EmptyContent != null)
+            {
+                @EmptyContent
+            }
+        </div>
+    }
+    else
+    {
+        <div class="table-responsive @TableContainerClass">
+            <table class="table @TableClass">
+                @if (TableHeader != null)
+                {
+                    <thead class="@TableHeaderClass">
+                        @TableHeader
+                    </thead>
+                }
+
+                <tbody class="@TableBodyClass">
+                    @if (TableRows != null)
+                    {
+                        @foreach (var item in Items)
+                        {
+                            @TableRows(item)
+                        }
+                    }
+                    else if (ChildContent != null)
+                    {
+                        @ChildContent
+                    }
+                </tbody>
+
+                @if (TableFooter != null)
+                {
+                    <tfoot class="@TableFooterClass">
+                        @TableFooter
+                    </tfoot>
+                }
+            </table>
+        </div>
+
+        @if (ShowPagination && PaginationData != null)
+        {
+            <div class="table-pagination mt-3">
+                <Pagination TItem="T" 
+                            PaginationInfo="PaginationData"
+                            OnPageChanged="OnPageChanged"
+                            OnPageSizeChanged="OnPageSizeChanged"
+                            CurrentPageSize="CurrentPageSize"
+                            ShowInfo="ShowPaginationInfo"
+                            ShowPageSizeSelector="ShowPageSizeSelector" />
+            </div>
+        }
+    }
+
+    @if (ShowFooter && FooterContent != null)
+    {
+        <div class="table-footer mt-3">
+            @FooterContent
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public IEnumerable<T>? Items { get; set; }
+    [Parameter] public PaginacionDto<T>? PaginationData { get; set; }
+
+    [Parameter] public string? Title { get; set; }
+    [Parameter] public bool ShowHeader { get; set; } = true;
+    [Parameter] public bool ShowSearch { get; set; } = true;
+    [Parameter] public bool ShowPagination { get; set; } = true;
+    [Parameter] public bool ShowFooter { get; set; } = false;
+    [Parameter] public bool ShowPaginationInfo { get; set; } = true;
+    [Parameter] public bool ShowPageSizeSelector { get; set; } = true;
+
+    [Parameter] public bool IsLoading { get; set; } = false;
+    [Parameter] public string LoadingMessage { get; set; } = "Cargando datos...";
+    [Parameter] public string EmptyMessage { get; set; } = "No se encontraron registros";
+    [Parameter] public string SearchPlaceholder { get; set; } = "Buscar...";
+
+    [Parameter] public string SearchTerm { get; set; } = string.Empty;
+    [Parameter] public EventCallback<string> SearchTermChanged { get; set; }
+    [Parameter] public EventCallback<string> OnSearch { get; set; }
+    [Parameter] public int SearchDelayMs { get; set; } = 500;
+
+    [Parameter] public int CurrentPageSize { get; set; } = 10;
+    [Parameter] public EventCallback<int> OnPageChanged { get; set; }
+    [Parameter] public EventCallback<int> OnPageSizeChanged { get; set; }
+
+    [Parameter] public string ContainerClass { get; set; } = "";
+    [Parameter] public string TableContainerClass { get; set; } = "";
+    [Parameter] public string TableClass { get; set; } = "table-hover";
+    [Parameter] public string TableHeaderClass { get; set; } = "table-dark";
+    [Parameter] public string TableBodyClass { get; set; } = "";
+    [Parameter] public string TableFooterClass { get; set; } = "";
+
+    [Parameter] public RenderFragment? HeaderContent { get; set; }
+    [Parameter] public RenderFragment? SearchFilters { get; set; }
+    [Parameter] public RenderFragment? TableHeader { get; set; }
+    [Parameter] public RenderFragment<T>? TableRows { get; set; }
+    [Parameter] public RenderFragment? TableFooter { get; set; }
+    [Parameter] public RenderFragment? FooterContent { get; set; }
+    [Parameter] public RenderFragment? EmptyContent { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private Timer? _searchTimer;
+    private string _previousSearchTerm = string.Empty;
+
+    protected override void OnInitialized()
+    {
+        _previousSearchTerm = SearchTerm;
+    }
+
+    protected override void OnParametersSet()
+    {
+        if (SearchTerm != _previousSearchTerm)
+        {
+            _previousSearchTerm = SearchTerm;
+            SetSearchTimer();
+        }
+    }
+
+    private void SetSearchTimer()
+    {
+        _searchTimer?.Dispose();
+        _searchTimer = new Timer(async _ =>
+        {
+            await InvokeAsync(async () =>
+            {
+                await PerformSearch();
+            });
+        }, null, SearchDelayMs, Timeout.Infinite);
+    }
+
+    private async Task PerformSearch()
+    {
+        if (SearchTermChanged.HasDelegate)
+        {
+            await SearchTermChanged.InvokeAsync(SearchTerm);
+        }
+
+        if (OnSearch.HasDelegate)
+        {
+            await OnSearch.InvokeAsync(SearchTerm);
+        }
+
+        StateHasChanged();
+    }
+
+    private async Task OnSearchKeyPress(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            _searchTimer?.Dispose();
+            await PerformSearch();
+        }
+    }
+
+    private async Task ClearSearch()
+    {
+        SearchTerm = string.Empty;
+        _searchTimer?.Dispose();
+        await PerformSearch();
+    }
+
+    public void Refresh()
+    {
+        StateHasChanged();
+    }
+
+    public void SetLoading(bool loading, string? message = null)
+    {
+        IsLoading = loading;
+        if (!string.IsNullOrEmpty(message))
+        {
+            LoadingMessage = message;
+        }
+        StateHasChanged();
+    }
+
+    public void Dispose()
+    {
+        _searchTimer?.Dispose();
+    }
+}

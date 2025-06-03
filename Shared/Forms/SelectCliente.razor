@@ -1,0 +1,398 @@
+﻿@using FacturacionPortal.WEB.Models.Facturacion
+@using FacturacionPortal.WEB.Services.Interface
+@inject IClienteService ClienteService
+
+<div class="select-cliente-container @ContainerClass">
+    <div class="input-group">
+        <select class="form-select @CssClass @(HasError ? "is-invalid" : "")"
+                @bind="SelectedClienteId"
+                @bind:event="onchange"
+                disabled="@IsDisabled">
+            <option value="">@Placeholder</option>
+            @if (Clientes != null)
+            {
+                @foreach (var cliente in Clientes)
+                {
+                    <option value="@cliente.Id">@cliente.DocumentoNombre</option>
+                }
+            }
+        </select>
+
+        @if (ShowSearchButton)
+        {
+            <button class="btn btn-outline-secondary" type="button" @onclick="ToggleSearch" title="Buscar cliente">
+                <i class="bi bi-search"></i>
+            </button>
+        }
+
+        @if (ShowCreateButton && CanCreate)
+        {
+            <button class="btn btn-outline-primary" type="button" @onclick="ShowCreateModal" title="Crear nuevo cliente">
+                <i class="bi bi-plus"></i>
+            </button>
+        }
+    </div>
+
+    @if (HasError && !string.IsNullOrEmpty(ErrorMessage))
+    {
+        <div class="invalid-feedback d-block">@ErrorMessage</div>
+    }
+
+    @if (ShowSearch)
+    {
+        <div class="search-panel mt-2 p-3 border rounded">
+            <div class="row g-2">
+                <div class="col-md-8">
+                    <input type="text" class="form-control" placeholder="Buscar por documento o nombre..."
+                           @bind="SearchTerm" @bind:event="oninput" @onkeypress="OnSearchKeyPress" />
+                </div>
+                <div class="col-md-4">
+                    <div class="d-flex gap-1">
+                        <button class="btn btn-primary" @onclick="SearchClientes" disabled="@IsSearching">
+                            @if (IsSearching)
+                            {
+                                <span class="spinner-border spinner-border-sm me-1"></span>
+                            }
+                            Buscar
+                        </button>
+                        <button class="btn btn-secondary" @onclick="ClearSearch">Limpiar</button>
+                        <button class="btn btn-outline-secondary" @onclick="ToggleSearch">
+                            <i class="bi bi-x"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            @if (IsSearching)
+            {
+                <div class="text-center mt-2">
+                    <div class="spinner-border spinner-border-sm"></div>
+                    <span class="ms-2">Buscando...</span>
+                </div>
+            }
+            else if (SearchResults != null && SearchResults.Any())
+            {
+                <div class="search-results mt-2 max-height-200 overflow-auto">
+                    @foreach (var cliente in SearchResults)
+                    {
+                        <div class="search-result-item p-2 border-bottom cursor-pointer hover-bg-light"
+                             @onclick="() => SelectSearchResult(cliente)">
+                            <div class="fw-bold">@cliente.DocumentoNombre</div>
+                            <small class="text-muted">@cliente.Direccion - @cliente.Telefono</small>
+                        </div>
+                    }
+                </div>
+            }
+            else if (!string.IsNullOrEmpty(SearchTerm) && !IsSearching)
+            {
+                <div class="text-muted mt-2">No se encontraron clientes</div>
+            }
+        </div>
+    }
+
+    @if (SelectedCliente != null && ShowSelectedInfo)
+    {
+        <div class="selected-cliente-info mt-2 p-2 bg-light rounded">
+            <div class="row">
+                <div class="col-md-6">
+                    <small class="text-muted">Cliente:</small>
+                    <div>@SelectedCliente.NombreCompleto</div>
+                </div>
+                <div class="col-md-3">
+                    <small class="text-muted">Documento:</small>
+                    <div>@SelectedCliente.NumeroDocumento</div>
+                </div>
+                <div class="col-md-3">
+                    <small class="text-muted">Teléfono:</small>
+                    <div>@SelectedCliente.Telefono</div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<style>
+    .max-height-200 {
+        max-height: 200px;
+    }
+
+    .cursor-pointer {
+        cursor: pointer;
+    }
+
+    .hover-bg-light:hover {
+        background-color: var(--bs-light) !important;
+    }
+
+    .search-result-item {
+        transition: background-color 0.15s ease-in-out;
+    }
+</style>
+
+@code {
+    [Parameter] public int? Value { get; set; }
+    [Parameter] public EventCallback<int?> ValueChanged { get; set; }
+
+    [Parameter] public ClienteDto? Cliente { get; set; }
+    [Parameter] public EventCallback<ClienteDto?> ClienteChanged { get; set; }
+
+    [Parameter] public string Placeholder { get; set; } = "Seleccionar cliente...";
+    [Parameter] public bool IsDisabled { get; set; } = false;
+    [Parameter] public bool IsRequired { get; set; } = false;
+    [Parameter] public bool ShowSearchButton { get; set; } = true;
+    [Parameter] public bool ShowCreateButton { get; set; } = true;
+    [Parameter] public bool ShowSelectedInfo { get; set; } = false;
+    [Parameter] public bool CanCreate { get; set; } = true;
+    [Parameter] public bool AutoLoadClientes { get; set; } = true;
+
+    [Parameter] public string CssClass { get; set; } = "";
+    [Parameter] public string ContainerClass { get; set; } = "";
+    [Parameter] public string? ErrorMessage { get; set; }
+
+    [Parameter] public EventCallback<ClienteDto> OnCreateCliente { get; set; }
+    [Parameter] public EventCallback OnClienteSelected { get; set; }
+
+    private List<ClienteDto>? Clientes;
+    private List<ClienteDto>? SearchResults;
+    private ClienteDto? SelectedCliente;
+    private string SearchTerm = "";
+    private bool ShowSearch = false;
+    private bool IsSearching = false;
+    private bool IsLoadingClientes = false;
+    private Timer? _searchTimer;
+
+    private int? SelectedClienteId
+    {
+        get => Value;
+        set
+        {
+            if (Value != value)
+            {
+                Value = value;
+                ValueChanged.InvokeAsync(value);
+                OnClienteIdChanged(value);
+            }
+        }
+    }
+
+    private bool HasError => !string.IsNullOrEmpty(ErrorMessage);
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AutoLoadClientes)
+        {
+            await LoadClientes();
+        }
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Value.HasValue && (SelectedCliente == null || SelectedCliente.Id != Value.Value))
+        {
+            await LoadSelectedCliente();
+        }
+        else if (!Value.HasValue)
+        {
+            SelectedCliente = null;
+            if (ClienteChanged.HasDelegate)
+            {
+                await ClienteChanged.InvokeAsync(null);
+            }
+        }
+    }
+
+    private async Task LoadClientes()
+    {
+        try
+        {
+            IsLoadingClientes = true;
+            StateHasChanged();
+
+            var result = await ClienteService.GetAll();
+            if (result.Success && result.Data != null)
+            {
+                Clientes = result.Data.Where(c => c.Activo).ToList();
+            }
+        }
+        catch (Exception)
+        {
+            // Manejar error silenciosamente
+        }
+        finally
+        {
+            IsLoadingClientes = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadSelectedCliente()
+    {
+        if (!Value.HasValue) return;
+
+        try
+        {
+            if (Clientes != null)
+            {
+                SelectedCliente = Clientes.FirstOrDefault(c => c.Id == Value.Value);
+            }
+
+            if (SelectedCliente == null)
+            {
+                var result = await ClienteService.GetById(Value.Value);
+                if (result.Success && result.Data != null)
+                {
+                    SelectedCliente = result.Data;
+                }
+            }
+
+            if (SelectedCliente != null && ClienteChanged.HasDelegate)
+            {
+                await ClienteChanged.InvokeAsync(SelectedCliente);
+            }
+        }
+        catch (Exception)
+        {
+            // Manejar error silenciosamente
+        }
+    }
+
+    private async Task OnClienteIdChanged(int? clienteId)
+    {
+        if (clienteId.HasValue)
+        {
+            SelectedCliente = Clientes?.FirstOrDefault(c => c.Id == clienteId.Value);
+
+            if (SelectedCliente != null)
+            {
+                if (ClienteChanged.HasDelegate)
+                {
+                    await ClienteChanged.InvokeAsync(SelectedCliente);
+                }
+
+                if (OnClienteSelected.HasDelegate)
+                {
+                    await OnClienteSelected.InvokeAsync();
+                }
+            }
+        }
+        else
+        {
+            SelectedCliente = null;
+            if (ClienteChanged.HasDelegate)
+            {
+                await ClienteChanged.InvokeAsync(null);
+            }
+        }
+    }
+
+    private void ToggleSearch()
+    {
+        ShowSearch = !ShowSearch;
+        if (!ShowSearch)
+        {
+            SearchTerm = "";
+            SearchResults = null;
+        }
+    }
+
+    private async Task SearchClientes()
+    {
+        if (string.IsNullOrWhiteSpace(SearchTerm)) return;
+
+        try
+        {
+            IsSearching = true;
+            StateHasChanged();
+
+            var result = await ClienteService.GetPaginated(1, 20, SearchTerm);
+            if (result.Success && result.Data?.Lista != null)
+            {
+                SearchResults = result.Data.Lista.ToList();
+            }
+            else
+            {
+                SearchResults = new List<ClienteDto>();
+            }
+        }
+        catch (Exception)
+        {
+            SearchResults = new List<ClienteDto>();
+        }
+        finally
+        {
+            IsSearching = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task OnSearchKeyPress(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            _searchTimer?.Dispose();
+            await SearchClientes();
+        }
+        else
+        {
+            SetSearchTimer();
+        }
+    }
+
+    private void SetSearchTimer()
+    {
+        _searchTimer?.Dispose();
+        _searchTimer = new Timer(async _ =>
+        {
+            await InvokeAsync(SearchClientes);
+        }, null, 500, Timeout.Infinite);
+    }
+
+    private async Task SelectSearchResult(ClienteDto cliente)
+    {
+        SelectedClienteId = cliente.Id;
+        ShowSearch = false;
+        SearchTerm = "";
+        SearchResults = null;
+
+        if (!Clientes?.Any(c => c.Id == cliente.Id) == true)
+        {
+            Clientes?.Add(cliente);
+        }
+    }
+
+    private void ClearSearch()
+    {
+        SearchTerm = "";
+        SearchResults = null;
+    }
+
+    private async Task ShowCreateModal()
+    {
+        if (OnCreateCliente.HasDelegate)
+        {
+            await OnCreateCliente.InvokeAsync(new ClienteDto());
+        }
+    }
+
+    public async Task RefreshClientes()
+    {
+        await LoadClientes();
+    }
+
+    public void SetError(string? errorMessage)
+    {
+        ErrorMessage = errorMessage;
+        StateHasChanged();
+    }
+
+    public void ClearError()
+    {
+        ErrorMessage = null;
+        StateHasChanged();
+    }
+
+    public void Dispose()
+    {
+        _searchTimer?.Dispose();
+    }
+}

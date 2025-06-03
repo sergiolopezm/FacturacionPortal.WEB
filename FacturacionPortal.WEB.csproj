@@ -18,11 +18,6 @@
 
   <ItemGroup>
     <Folder Include="Configuration\" />
-    <Folder Include="Shared\Components\" />
-    <Folder Include="Shared\Features\FacturaDetalle\" />
-    <Folder Include="Shared\Features\CalculadoraFactura\" />
-    <Folder Include="Shared\Forms\" />
-    <Folder Include="Shared\Layout\" />
   </ItemGroup>
 
 </Project>

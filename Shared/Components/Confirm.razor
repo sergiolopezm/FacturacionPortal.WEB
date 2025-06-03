@@ -1,0 +1,273 @@
+﻿@if (IsVisible)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);" @onclick="OnBackdropClick">
+        <div class="modal-dialog @GetModalSizeClass()" @onclick:stopPropagation="true">
+            <div class="modal-content">
+                <div class="modal-header @GetHeaderClass()">
+                    @if (!string.IsNullOrEmpty(Icon))
+                    {
+                        <i class="@Icon me-2"></i>
+                    }
+                    <h5 class="modal-title">@Title</h5>
+                    @if (ShowCloseButton)
+                    {
+                        <button type="button" class="btn-close" @onclick="Cancel" aria-label="Close"></button>
+                    }
+                </div>
+
+                <div class="modal-body">
+                    @if (!string.IsNullOrEmpty(Message))
+                    {
+                        <p class="mb-0">@Message</p>
+                    }
+                    @if (ChildContent != null)
+                    {
+                        @ChildContent
+                    }
+                </div>
+
+                <div class="modal-footer">
+                    @if (ShowCancelButton)
+                    {
+                        <button type="button" class="btn @CancelButtonClass" @onclick="Cancel" disabled="@IsProcessing">
+                            @if (IsProcessing && ProcessingAction == ConfirmAction.Cancel)
+                            {
+                                <span class="spinner-border spinner-border-sm me-1"></span>
+                            }
+                            @CancelButtonText
+                        </button>
+                    }
+
+                    <button type="button" class="btn @ConfirmButtonClass" @onclick="Confirm" disabled="@IsProcessing">
+                        @if (IsProcessing && ProcessingAction == ConfirmAction.Confirm)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1"></span>
+                        }
+                        @ConfirmButtonText
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public string Title { get; set; } = "Confirmar Acción";
+    [Parameter] public string Message { get; set; } = "¿Está seguro que desea continuar?";
+    [Parameter] public string? Icon { get; set; }
+    [Parameter] public bool IsVisible { get; set; } = false;
+    [Parameter] public bool ShowCloseButton { get; set; } = true;
+    [Parameter] public bool ShowCancelButton { get; set; } = true;
+    [Parameter] public bool CloseOnBackdrop { get; set; } = true;
+    [Parameter] public bool IsProcessing { get; set; } = false;
+
+    [Parameter] public string ConfirmButtonText { get; set; } = "Confirmar";
+    [Parameter] public string CancelButtonText { get; set; } = "Cancelar";
+    [Parameter] public string ConfirmButtonClass { get; set; } = "btn-primary";
+    [Parameter] public string CancelButtonClass { get; set; } = "btn-secondary";
+
+    [Parameter] public ConfirmType Type { get; set; } = ConfirmType.Default;
+    [Parameter] public ConfirmSize Size { get; set; } = ConfirmSize.Medium;
+
+    [Parameter] public EventCallback<bool> OnResult { get; set; }
+    [Parameter] public EventCallback OnConfirm { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private ConfirmAction ProcessingAction = ConfirmAction.None;
+
+    protected override void OnParametersSet()
+    {
+        if (string.IsNullOrEmpty(Icon))
+        {
+            Icon = GetDefaultIcon();
+        }
+
+        SetButtonClasses();
+    }
+
+    private void SetButtonClasses()
+    {
+        switch (Type)
+        {
+            case ConfirmType.Danger:
+                ConfirmButtonClass = "btn-danger";
+                break;
+            case ConfirmType.Warning:
+                ConfirmButtonClass = "btn-warning";
+                break;
+            case ConfirmType.Success:
+                ConfirmButtonClass = "btn-success";
+                break;
+            case ConfirmType.Info:
+                ConfirmButtonClass = "btn-info";
+                break;
+            default:
+                if (ConfirmButtonClass == "btn-primary") // Solo cambiar si no se ha personalizado
+                    ConfirmButtonClass = "btn-primary";
+                break;
+        }
+    }
+
+    private string GetDefaultIcon()
+    {
+        return Type switch
+        {
+            ConfirmType.Danger => "bi bi-exclamation-triangle-fill text-danger",
+            ConfirmType.Warning => "bi bi-exclamation-circle-fill text-warning",
+            ConfirmType.Success => "bi bi-check-circle-fill text-success",
+            ConfirmType.Info => "bi bi-info-circle-fill text-info",
+            _ => "bi bi-question-circle-fill text-primary"
+        };
+    }
+
+    private string GetHeaderClass()
+    {
+        return Type switch
+        {
+            ConfirmType.Danger => "border-bottom border-danger",
+            ConfirmType.Warning => "border-bottom border-warning",
+            ConfirmType.Success => "border-bottom border-success",
+            ConfirmType.Info => "border-bottom border-info",
+            _ => ""
+        };
+    }
+
+    private string GetModalSizeClass()
+    {
+        return Size switch
+        {
+            ConfirmSize.Small => "modal-sm",
+            ConfirmSize.Large => "modal-lg",
+            ConfirmSize.ExtraLarge => "modal-xl",
+            _ => ""
+        };
+    }
+
+    private async Task Confirm()
+    {
+        if (IsProcessing) return;
+
+        IsProcessing = true;
+        ProcessingAction = ConfirmAction.Confirm;
+        StateHasChanged();
+
+        try
+        {
+            if (OnConfirm.HasDelegate)
+            {
+                await OnConfirm.InvokeAsync();
+            }
+
+            if (OnResult.HasDelegate)
+            {
+                await OnResult.InvokeAsync(true);
+            }
+        }
+        finally
+        {
+            IsProcessing = false;
+            ProcessingAction = ConfirmAction.None;
+            Hide();
+        }
+    }
+
+    private async Task Cancel()
+    {
+        if (IsProcessing) return;
+
+        IsProcessing = true;
+        ProcessingAction = ConfirmAction.Cancel;
+        StateHasChanged();
+
+        try
+        {
+            if (OnCancel.HasDelegate)
+            {
+                await OnCancel.InvokeAsync();
+            }
+
+            if (OnResult.HasDelegate)
+            {
+                await OnResult.InvokeAsync(false);
+            }
+        }
+        finally
+        {
+            IsProcessing = false;
+            ProcessingAction = ConfirmAction.None;
+            Hide();
+        }
+    }
+
+    private async Task OnBackdropClick()
+    {
+        if (CloseOnBackdrop && !IsProcessing)
+        {
+            await Cancel();
+        }
+    }
+
+    public void Show(string? title = null, string? message = null, ConfirmType? type = null)
+    {
+        if (!string.IsNullOrEmpty(title))
+            Title = title;
+
+        if (!string.IsNullOrEmpty(message))
+            Message = message;
+
+        if (type.HasValue)
+            Type = type.Value;
+
+        IsVisible = true;
+        StateHasChanged();
+    }
+
+    public void Hide()
+    {
+        IsVisible = false;
+        IsProcessing = false;
+        ProcessingAction = ConfirmAction.None;
+        StateHasChanged();
+    }
+
+    public async Task<bool> ShowAsync(string? title = null, string? message = null, ConfirmType? type = null)
+    {
+        var tcs = new TaskCompletionSource<bool>();
+
+        EventCallback<bool> originalCallback = OnResult;
+        OnResult = EventCallback.Factory.Create<bool>(this, (result) =>
+        {
+            tcs.SetResult(result);
+            OnResult = originalCallback;
+        });
+
+        Show(title, message, type);
+
+        return await tcs.Task;
+    }
+}
+
+public enum ConfirmType
+{
+    Default,
+    Danger,
+    Warning,
+    Success,
+    Info
+}
+
+public enum ConfirmSize
+{
+    Small,
+    Medium,
+    Large,
+    ExtraLarge
+}
+
+public enum ConfirmAction
+{
+    None,
+    Confirm,
+    Cancel
+}

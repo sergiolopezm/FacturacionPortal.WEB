@@ -1,0 +1,327 @@
+﻿@using Microsoft.AspNetCore.Components.Authorization
+@inject NavigationManager Navigation
+
+<div class="top-row ps-3 navbar navbar-dark">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="/">
+            <i class="bi bi-receipt-cutoff me-2"></i>
+            FacturaciónPortal
+        </a>
+        <button title="Menú de navegación" class="navbar-toggler" @onclick="ToggleNavMenu">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+    </div>
+</div>
+
+<div class="@NavMenuCssClass nav-scrollable" @onclick="ToggleNavMenu">
+    <nav class="flex-column">
+
+        <!-- Dashboard -->
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="/" Match="NavLinkMatch.All">
+                <span class="bi bi-speedometer2" aria-hidden="true"></span> Dashboard
+            </NavLink>
+        </div>
+
+        <!-- Facturación -->
+        <div class="nav-section">
+            <div class="nav-section-title px-3 py-2">
+                <small class="text-muted fw-bold">FACTURACIÓN</small>
+            </div>
+
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="/facturas">
+                    <span class="bi bi-receipt" aria-hidden="true"></span> Facturas
+                </NavLink>
+            </div>
+
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="/facturas/crear">
+                    <span class="bi bi-plus-circle" aria-hidden="true"></span> Crear Factura
+                </NavLink>
+            </div>
+        </div>
+
+        <!-- Gestión -->
+        <div class="nav-section">
+            <div class="nav-section-title px-3 py-2">
+                <small class="text-muted fw-bold">GESTIÓN</small>
+            </div>
+
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="/clientes">
+                    <span class="bi bi-people" aria-hidden="true"></span> Clientes
+                </NavLink>
+            </div>
+
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="/articulos">
+                    <span class="bi bi-box-seam" aria-hidden="true"></span> Artículos
+                </NavLink>
+            </div>
+
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="/categorias">
+                    <span class="bi bi-tags" aria-hidden="true"></span> Categorías
+                </NavLink>
+            </div>
+        </div>
+
+        <!-- Reportes -->
+        <div class="nav-section">
+            <div class="nav-section-title px-3 py-2">
+                <small class="text-muted fw-bold">REPORTES</small>
+            </div>
+
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="/reportes/ventas">
+                    <span class="bi bi-graph-up" aria-hidden="true"></span> Reporte Ventas
+                </NavLink>
+            </div>
+
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="/reportes/articulos-vendidos">
+                    <span class="bi bi-trophy" aria-hidden="true"></span> Más Vendidos
+                </NavLink>
+            </div>
+
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="/reportes/clientes-frecuentes">
+                    <span class="bi bi-star" aria-hidden="true"></span> Clientes Frecuentes
+                </NavLink>
+            </div>
+
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="/reportes/stock-bajo">
+                    <span class="bi bi-exclamation-triangle" aria-hidden="true"></span> Stock Bajo
+                </NavLink>
+            </div>
+        </div>
+
+        <!-- Configuración -->
+        <AuthorizeView Roles="Administrador">
+            <div class="nav-section">
+                <div class="nav-section-title px-3 py-2">
+                    <small class="text-muted fw-bold">CONFIGURACIÓN</small>
+                </div>
+
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="/usuarios">
+                        <span class="bi bi-person-gear" aria-hidden="true"></span> Usuarios
+                    </NavLink>
+                </div>
+
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="/configuracion">
+                        <span class="bi bi-gear" aria-hidden="true"></span> Sistema
+                    </NavLink>
+                </div>
+            </div>
+        </AuthorizeView>
+
+        <!-- Enlaces rápidos -->
+        <div class="nav-section mt-auto">
+            <div class="nav-section-title px-3 py-2">
+                <small class="text-muted fw-bold">ACCESOS RÁPIDOS</small>
+            </div>
+
+            <div class="nav-item px-3">
+                <button class="nav-link btn btn-link w-100 text-start" @onclick="CreateQuickInvoice">
+                    <span class="bi bi-lightning" aria-hidden="true"></span> Factura Rápida
+                </button>
+            </div>
+
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="/buscar">
+                    <span class="bi bi-search" aria-hidden="true"></span> Búsqueda Global
+                </NavLink>
+            </div>
+        </div>
+
+        <!-- Información del usuario -->
+        <AuthorizeView>
+            <Authorized>
+                <div class="nav-footer p-3 mt-3 border-top">
+                    <div class="d-flex align-items-center">
+                        <div class="user-avatar me-2">
+                            <div class="avatar-placeholder rounded-circle">
+                                <i class="bi bi-person-fill"></i>
+                            </div>
+                        </div>
+                        <div class="user-info flex-grow-1">
+                            <div class="user-name">@context.User?.Identity?.Name</div>
+                            <small class="text-muted">
+                                @GetUserRole(context)
+                            </small>
+                        </div>
+                        <div class="user-status">
+                            <span class="badge bg-success">
+                                <i class="bi bi-circle-fill" style="font-size: 0.5rem;"></i>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </Authorized>
+        </AuthorizeView>
+
+    </nav>
+</div>
+
+<style>
+    .nav-section {
+        margin-bottom: 1rem;
+    }
+
+    .nav-section-title {
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+        .nav-section-title small {
+            font-size: 0.7rem;
+            letter-spacing: 0.5px;
+        }
+
+    .nav-link {
+        border-radius: 0.375rem;
+        margin-bottom: 0.25rem;
+        transition: all 0.15s ease-in-out;
+    }
+
+        .nav-link:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+            transform: translateX(4px);
+        }
+
+        .nav-link.active {
+            background-color: rgba(255, 255, 255, 0.2);
+            border-left: 3px solid #fff;
+            transform: translateX(4px);
+        }
+
+        .nav-link .bi {
+            width: 1.25rem;
+            margin-right: 0.75rem;
+        }
+
+    .avatar-placeholder {
+        width: 32px;
+        height: 32px;
+        background-color: rgba(255, 255, 255, 0.2);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-size: 14px;
+    }
+
+    .user-name {
+        font-size: 0.875rem;
+        font-weight: 500;
+        color: white;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .nav-footer {
+        background-color: rgba(0, 0, 0, 0.1);
+    }
+
+    .btn-link {
+        color: #d7d7d7 !important;
+        text-decoration: none;
+        padding: 0.5rem 0.75rem;
+        border: none;
+    }
+
+        .btn-link:hover {
+            color: white !important;
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+
+    /* Responsive adjustments */
+    @@media (max-width: 640.98px) {
+        .nav-footer
+
+    {
+        display: none;
+    }
+
+    .nav-section-title {
+        display: none;
+    }
+
+    .nav-link {
+        padding: 0.75rem;
+        margin-bottom: 0.1rem;
+    }
+
+    }
+
+    /* Scroll behavior */
+    .nav-scrollable {
+        height: calc(100vh - 3.5rem);
+        overflow-y: auto;
+        scrollbar-width: thin;
+        scrollbar-color: rgba(255, 255, 255, 0.3) transparent;
+    }
+
+        .nav-scrollable::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .nav-scrollable::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .nav-scrollable::-webkit-scrollbar-thumb {
+            background-color: rgba(255, 255, 255, 0.3);
+            border-radius: 3px;
+        }
+
+            .nav-scrollable::-webkit-scrollbar-thumb:hover {
+                background-color: rgba(255, 255, 255, 0.5);
+            }
+</style>
+
+@code {
+    private bool collapseNavMenu = true;
+
+    private string? NavMenuCssClass => collapseNavMenu ? "collapse" : null;
+
+    private void ToggleNavMenu()
+    {
+        collapseNavMenu = !collapseNavMenu;
+    }
+
+    private async Task CreateQuickInvoice()
+    {
+        // Cerrar el menú móvil
+        collapseNavMenu = true;
+
+        // Navegar a crear factura con parámetro de factura rápida
+        Navigation.NavigateTo("/facturas/crear?quick=true");
+        await Task.CompletedTask;
+    }
+
+    private string GetUserRole(AuthenticationState authenticationState)
+    {
+        var user = authenticationState.User;
+        if (user?.Identity?.IsAuthenticated == true)
+        {
+            var roleClaim = user.FindFirst("role") ?? user.FindFirst("http://schemas.microsoft.com/ws/2008/06/identity/claims/role");
+            return roleClaim?.Value ?? "Usuario";
+        }
+        return "Invitado";
+    }
+
+    protected override void OnInitialized()
+    {
+        // Cerrar automáticamente el menú en navegación (para móviles)
+        Navigation.LocationChanged += (sender, args) =>
+        {
+            collapseNavMenu = true;
+            InvokeAsync(StateHasChanged);
+        };
+    }
+}

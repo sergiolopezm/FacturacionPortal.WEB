@@ -1,0 +1,270 @@
+﻿@if (IsVisible)
+{
+    <div class="loading-container @ContainerClass">
+        @if (ShowOverlay)
+        {
+            <div class="loading-overlay @OverlayClass"></div>
+        }
+
+        <div class="loading-content @ContentClass">
+            <div class="loading-spinner @SpinnerClass">
+                @if (SpinnerType == LoadingSpinnerType.Border)
+                {
+                    <div class="spinner-border @SizeClass @ColorClass" role="status">
+                        @if (!string.IsNullOrEmpty(Text))
+                        {
+                            <span class="visually-hidden">@Text</span>
+                        }
+                    </div>
+                }
+                else if (SpinnerType == LoadingSpinnerType.Grow)
+                {
+                    <div class="spinner-grow @SizeClass @ColorClass" role="status">
+                        @if (!string.IsNullOrEmpty(Text))
+                        {
+                            <span class="visually-hidden">@Text</span>
+                        }
+                    </div>
+                }
+                else if (SpinnerType == LoadingSpinnerType.Dots)
+                {
+                    <div class="loading-dots">
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                    </div>
+                }
+                else if (SpinnerType == LoadingSpinnerType.Pulse)
+                {
+                    <div class="loading-pulse @SizeClass"></div>
+                }
+            </div>
+
+            @if (!string.IsNullOrEmpty(Text) && ShowText)
+            {
+                <div class="loading-text mt-2 @TextClass">
+                    @Text
+                </div>
+            }
+
+            @if (ChildContent != null)
+            {
+                <div class="loading-custom-content">
+                    @ChildContent
+                </div>
+            }
+        </div>
+    </div>
+
+    <style>
+        .loading-container {
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .loading-container.fullscreen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 9999;
+        }
+
+        .loading-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(255, 255, 255, 0.8);
+            z-index: 1;
+        }
+
+        .loading-overlay.dark {
+            background-color: rgba(0, 0, 0, 0.5);
+        }
+
+        .loading-content {
+            position: relative;
+            z-index: 2;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .loading-dots {
+            display: inline-block;
+            position: relative;
+            width: 80px;
+            height: 80px;
+        }
+
+        .loading-dots span {
+            position: absolute;
+            top: 33px;
+            width: 13px;
+            height: 13px;
+            border-radius: 50%;
+            background: var(--bs-primary);
+            animation-timing-function: cubic-bezier(0, 1, 1, 0);
+        }
+
+        .loading-dots span:nth-child(1) {
+            left: 8px;
+            animation: loading-dots1 0.6s infinite;
+        }
+
+        .loading-dots span:nth-child(2) {
+            left: 8px;
+            animation: loading-dots2 0.6s infinite;
+        }
+
+        .loading-dots span:nth-child(3) {
+            left: 32px;
+            animation: loading-dots2 0.6s infinite;
+        }
+
+        @keyframes loading-dots1 {
+            0% { transform: scale(0); }
+            100% { transform: scale(1); }
+        }
+
+        @keyframes loading-dots2 {
+            0% { transform: translate(0, 0); }
+            100% { transform: translate(24px, 0); }
+        }
+
+        .loading-pulse {
+            width: 40px;
+            height: 40px;
+            background-color: var(--bs-primary);
+            border-radius: 100%;
+            animation: loading-pulse-scale 1.0s infinite ease-in-out;
+        }
+
+        .loading-pulse.loading-sm {
+            width: 20px;
+            height: 20px;
+        }
+
+        .loading-pulse.loading-lg {
+            width: 60px;
+            height: 60px;
+        }
+
+        @keyframes loading-pulse-scale {
+            0% { transform: scale(0); }
+            100% { transform: scale(1.0); opacity: 0; }
+        }
+
+        .loading-text {
+            color: var(--bs-body-color);
+            font-size: 0.875rem;
+        }
+
+        .spinner-border.loading-sm,
+        .spinner-grow.loading-sm {
+            width: 1.5rem;
+            height: 1.5rem;
+        }
+
+        .spinner-border.loading-lg,
+        .spinner-grow.loading-lg {
+            width: 3rem;
+            height: 3rem;
+        }
+    </style>
+}
+
+@code {
+    [Parameter] public bool IsVisible { get; set; } = true;
+    [Parameter] public string? Text { get; set; } = "Cargando...";
+    [Parameter] public bool ShowText { get; set; } = true;
+    [Parameter] public bool ShowOverlay { get; set; } = false;
+    [Parameter] public bool IsFullscreen { get; set; } = false;
+    [Parameter] public LoadingSpinnerType SpinnerType { get; set; } = LoadingSpinnerType.Border;
+    [Parameter] public LoadingSize Size { get; set; } = LoadingSize.Medium;
+    [Parameter] public LoadingColor Color { get; set; } = LoadingColor.Primary;
+    [Parameter] public string ContainerClass { get; set; } = string.Empty;
+    [Parameter] public string OverlayClass { get; set; } = string.Empty;
+    [Parameter] public string ContentClass { get; set; } = string.Empty;
+    [Parameter] public string SpinnerClass { get; set; } = string.Empty;
+    [Parameter] public string TextClass { get; set; } = string.Empty;
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    protected override void OnParametersSet()
+    {
+        if (IsFullscreen)
+        {
+            ContainerClass = $"{ContainerClass} fullscreen".Trim();
+            ShowOverlay = true;
+        }
+    }
+
+    private string SizeClass => Size switch
+    {
+        LoadingSize.Small => "loading-sm",
+        LoadingSize.Large => "loading-lg",
+        _ => ""
+    };
+
+    private string ColorClass => Color switch
+    {
+        LoadingColor.Primary => "text-primary",
+        LoadingColor.Secondary => "text-secondary",
+        LoadingColor.Success => "text-success",
+        LoadingColor.Danger => "text-danger",
+        LoadingColor.Warning => "text-warning",
+        LoadingColor.Info => "text-info",
+        LoadingColor.Light => "text-light",
+        LoadingColor.Dark => "text-dark",
+        _ => "text-primary"
+    };
+
+    public void Show(string? message = null)
+    {
+        if (!string.IsNullOrEmpty(message))
+        {
+            Text = message;
+        }
+        IsVisible = true;
+        StateHasChanged();
+    }
+
+    public void Hide()
+    {
+        IsVisible = false;
+        StateHasChanged();
+    }
+}
+
+public enum LoadingSpinnerType
+{
+    Border,
+    Grow,
+    Dots,
+    Pulse
+}
+
+public enum LoadingSize
+{
+    Small,
+    Medium,
+    Large
+}
+
+public enum LoadingColor
+{
+    Primary,
+    Secondary,
+    Success,
+    Danger,
+    Warning,
+    Info,
+    Light,
+    Dark
+}

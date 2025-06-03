@@ -1,0 +1,428 @@
+﻿@using FacturacionPortal.WEB.Models.Facturacion
+@using FacturacionPortal.WEB.Components.Shared
+@using FacturacionPortal.WEB.Helpers
+@using FacturacionPortal.WEB.Util
+
+<div class="calculadora-totales @ContainerClass">
+    @if (ShowHeader)
+    {
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h6 class="mb-0">@HeaderTitle</h6>
+            @if (ShowCalculateButton)
+            {
+                <button class="btn btn-outline-primary btn-sm" @onclick="CalculateTotals" disabled="@IsCalculating">
+                    @if (IsCalculating)
+                    {
+                        <span class="spinner-border spinner-border-sm me-1"></span>
+                    }
+                    else
+                    {
+                        <i class="bi bi-calculator me-1"></i>
+                    }
+                    Recalcular
+                </button>
+            }
+        </div>
+    }
+
+    <div class="card">
+        <div class="card-body">
+            @if (IsCalculating)
+            {
+                <div class="text-center py-3">
+                    <div class="spinner-border spinner-border-sm me-2"></div>
+                    <span>Calculando totales...</span>
+                </div>
+            }
+            else
+            {
+                <div class="totales-grid">
+                    <!-- Subtotal -->
+                    <div class="total-row">
+                        <div class="total-label">
+                            <span>Subtotal</span>
+                            @if (ShowTooltips)
+                            {
+                                <i class="bi bi-info-circle ms-1 text-muted" title="Suma de todos los artículos sin impuestos ni descuentos"></i>
+                            }
+                        </div>
+                        <div class="total-value">
+                            <CurrencyDisplay Value="@Totales.SubTotal"
+                                             ShowSymbol="true"
+                                             CssClass="fw-normal" />
+                        </div>
+                    </div>
+
+                    <!-- Descuento -->
+                    @if (Totales.AplicaDescuento || ShowZeroValues)
+                    {
+                        <div class="total-row">
+                            <div class="total-label">
+                                <span>Descuento (@Totales.PorcentajeDescuento.ToString("0.##")%)</span>
+                                @if (ShowTooltips)
+                                {
+                                    <i class="bi bi-info-circle ms-1 text-muted" title="@GetDiscountTooltip()"></i>
+                                }
+                            </div>
+                            <div class="total-value">
+                                <CurrencyDisplay Value="@(-Totales.ValorDescuento)"
+                                                 ShowSymbol="true"
+                                                 CssClass="fw-normal text-success" />
+                            </div>
+                        </div>
+                    }
+
+                    <!-- Base de impuestos -->
+                    <div class="total-row">
+                        <div class="total-label">
+                            <span>Base de Impuestos</span>
+                            @if (ShowTooltips)
+                            {
+                                <i class="bi bi-info-circle ms-1 text-muted" title="Subtotal menos descuentos, base para calcular el IVA"></i>
+                            }
+                        </div>
+                        <div class="total-value">
+                            <CurrencyDisplay Value="@Totales.BaseImpuestos"
+                                             ShowSymbol="true"
+                                             CssClass="fw-normal" />
+                        </div>
+                    </div>
+
+                    <!-- IVA -->
+                    <div class="total-row">
+                        <div class="total-label">
+                            <span>IVA (@Totales.PorcentajeIVA.ToString("0.##")%)</span>
+                            @if (ShowTooltips)
+                            {
+                                <i class="bi bi-info-circle ms-1 text-muted" title="Impuesto sobre el valor agregado"></i>
+                            }
+                        </div>
+                        <div class="total-value">
+                            <CurrencyDisplay Value="@Totales.ValorIVA"
+                                             ShowSymbol="true"
+                                             CssClass="fw-normal text-warning" />
+                        </div>
+                    </div>
+
+                    <!-- Separador -->
+                    <hr class="my-2" />
+
+                    <!-- Total -->
+                    <div class="total-row total-final">
+                        <div class="total-label">
+                            <span class="fw-bold fs-5">Total a Pagar</span>
+                        </div>
+                        <div class="total-value">
+                            <CurrencyDisplay Value="@Totales.Total"
+                                             ShowSymbol="true"
+                                             CssClass="fw-bold fs-4 text-primary" />
+                        </div>
+                    </div>
+                </div>
+
+                @if (ShowBreakdown)
+                {
+                    <div class="breakdown-section mt-3 pt-3 border-top">
+                        <h6 class="text-muted mb-2">Desglose del Cálculo</h6>
+                        <div class="breakdown-grid">
+                            <small class="text-muted">
+                                <div class="d-flex justify-content-between">
+                                    <span>Artículos:</span>
+                                    <span>@ItemCount item(s)</span>
+                                </div>
+                                <div class="d-flex justify-content-between">
+                                    <span>Cantidad total:</span>
+                                    <span>@TotalQuantity unidad(es)</span>
+                                </div>
+                                @if (Totales.AplicaDescuento)
+                                {
+                                    <div class="d-flex justify-content-between">
+                                        <span>Descuento aplicado:</span>
+                                        <span>Sí (≥ @CurrencyHelper.FormatCurrency(Constants.Facturacion.MontoMinimoDescuento))</span>
+                                    </div>
+                                }
+                                <div class="d-flex justify-content-between">
+                                    <span>Tasa IVA:</span>
+                                    <span>@Constants.Facturacion.PorcentajeIVA%</span>
+                                </div>
+                            </small>
+                        </div>
+                    </div>
+                }
+
+                @if (ShowPaymentInfo && Totales.Total > 0)
+                {
+                    <div class="payment-info mt-3 pt-3 border-top">
+                        <h6 class="text-muted mb-2">Información de Pago</h6>
+                        <div class="row g-2">
+                            <div class="col-6">
+                                <small class="text-muted">En efectivo:</small>
+                                <div><CurrencyDisplay Value="@Totales.Total" ShowSymbol="true" /></div>
+                            </div>
+                            <div class="col-6">
+                                <small class="text-muted">Con tarjeta:</small>
+                                <div><CurrencyDisplay Value="@Totales.Total" ShowSymbol="true" /></div>
+                            </div>
+                        </div>
+                    </div>
+                }
+
+                @if (ShowActions)
+                {
+                    <div class="actions-section mt-3 pt-3 border-top">
+                        <div class="d-flex gap-2 flex-wrap">
+                            @if (ShowPrintButton)
+                            {
+                                <button class="btn btn-outline-secondary btn-sm" @onclick="PrintTotals">
+                                    <i class="bi bi-printer me-1"></i>Imprimir
+                                </button>
+                            }
+                            @if (ShowExportButton)
+                            {
+                                <button class="btn btn-outline-info btn-sm" @onclick="ExportTotals">
+                                    <i class="bi bi-download me-1"></i>Exportar
+                                </button>
+                            }
+                            @if (AdditionalActions != null)
+                            {
+                                @AdditionalActions
+                            }
+                        </div>
+                    </div>
+                }
+            }
+        </div>
+    </div>
+
+    @if (ShowValidationMessages && ValidationMessages.Any())
+    {
+        <div class="validation-messages mt-2">
+            @foreach (var message in ValidationMessages)
+            {
+                <div class="alert alert-warning alert-sm py-1">
+                    <i class="bi bi-exclamation-triangle me-1"></i>
+                    <small>@message</small>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+<style>
+    .calculadora-totales .card {
+        border: 1px solid var(--bs-border-color);
+        box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    }
+
+    .totales-grid {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    .total-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.25rem 0;
+    }
+
+        .total-row.total-final {
+            padding: 0.75rem 0;
+            border-top: 2px solid var(--bs-primary);
+            margin-top: 0.5rem;
+        }
+
+    .total-label {
+        display: flex;
+        align-items: center;
+        flex: 1;
+    }
+
+    .total-value {
+        text-align: right;
+        min-width: 120px;
+    }
+
+    .breakdown-grid {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+    }
+
+    .alert-sm {
+        padding: 0.375rem 0.75rem;
+        margin-bottom: 0.25rem;
+        font-size: 0.875rem;
+    }
+
+    /* Responsive adjustments */
+    @@media (max-width: 576px) {
+        .total-row
+
+    {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.25rem;
+    }
+
+    .total-value {
+        text-align: left;
+        min-width: auto;
+        align-self: flex-end;
+    }
+
+    .total-row.total-final .total-value {
+        font-size: 1.25rem !important;
+    }
+
+    }
+</style>
+
+@code {
+    [Parameter, EditorRequired] public FacturaTotalesDto Totales { get; set; } = new();
+    [Parameter] public int ItemCount { get; set; } = 0;
+    [Parameter] public int TotalQuantity { get; set; } = 0;
+    [Parameter] public List<string> ValidationMessages { get; set; } = new();
+
+    [Parameter] public bool ShowHeader { get; set; } = true;
+    [Parameter] public bool ShowCalculateButton { get; set; } = false;
+    [Parameter] public bool ShowBreakdown { get; set; } = true;
+    [Parameter] public bool ShowPaymentInfo { get; set; } = false;
+    [Parameter] public bool ShowActions { get; set; } = false;
+    [Parameter] public bool ShowPrintButton { get; set; } = true;
+    [Parameter] public bool ShowExportButton { get; set; } = true;
+    [Parameter] public bool ShowTooltips { get; set; } = true;
+    [Parameter] public bool ShowZeroValues { get; set; } = false;
+    [Parameter] public bool ShowValidationMessages { get; set; } = true;
+
+    [Parameter] public string HeaderTitle { get; set; } = "Resumen de Totales";
+    [Parameter] public string ContainerClass { get; set; } = "";
+
+    [Parameter] public EventCallback OnCalculate { get; set; }
+    [Parameter] public EventCallback OnPrint { get; set; }
+    [Parameter] public EventCallback OnExport { get; set; }
+    [Parameter] public RenderFragment? AdditionalActions { get; set; }
+
+    private bool IsCalculating = false;
+
+    protected override void OnParametersSet()
+    {
+        // Validar totales automáticamente
+        ValidateTotals();
+    }
+
+    private async Task CalculateTotals()
+    {
+        if (IsCalculating) return;
+
+        try
+        {
+            IsCalculating = true;
+            StateHasChanged();
+
+            if (OnCalculate.HasDelegate)
+            {
+                await OnCalculate.InvokeAsync();
+            }
+        }
+        finally
+        {
+            IsCalculating = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task PrintTotals()
+    {
+        if (OnPrint.HasDelegate)
+        {
+            await OnPrint.InvokeAsync();
+        }
+        else
+        {
+            // Implementación básica de impresión
+            await Task.CompletedTask;
+        }
+    }
+
+    private async Task ExportTotals()
+    {
+        if (OnExport.HasDelegate)
+        {
+            await OnExport.InvokeAsync();
+        }
+        else
+        {
+            // Implementación básica de exportación
+            await Task.CompletedTask;
+        }
+    }
+
+    private void ValidateTotals()
+    {
+        ValidationMessages.Clear();
+
+        if (Totales.SubTotal < 0)
+        {
+            ValidationMessages.Add("El subtotal no puede ser negativo");
+        }
+
+        if (Totales.ValorDescuento < 0)
+        {
+            ValidationMessages.Add("El valor del descuento no puede ser negativo");
+        }
+
+        if (Totales.ValorIVA < 0)
+        {
+            ValidationMessages.Add("El valor del IVA no puede ser negativo");
+        }
+
+        if (Totales.Total < 0)
+        {
+            ValidationMessages.Add("El total no puede ser negativo");
+        }
+
+        // Verificar coherencia de cálculos
+        var calculatedBase = Totales.SubTotal - Totales.ValorDescuento;
+        if (Math.Abs(calculatedBase - Totales.BaseImpuestos) > 0.01m)
+        {
+            ValidationMessages.Add("Error en el cálculo de la base de impuestos");
+        }
+
+        var calculatedIVA = CurrencyHelper.CalculatePercentage(Totales.BaseImpuestos, Totales.PorcentajeIVA);
+        if (Math.Abs(calculatedIVA - Totales.ValorIVA) > 0.01m)
+        {
+            ValidationMessages.Add("Error en el cálculo del IVA");
+        }
+
+        var calculatedTotal = Totales.BaseImpuestos + Totales.ValorIVA;
+        if (Math.Abs(calculatedTotal - Totales.Total) > 0.01m)
+        {
+            ValidationMessages.Add("Error en el cálculo del total");
+        }
+    }
+
+    private string GetDiscountTooltip()
+    {
+        var minAmount = CurrencyHelper.FormatCurrency(Constants.Facturacion.MontoMinimoDescuento);
+        return $"Descuento del {Constants.Facturacion.PorcentajeDescuento}% aplicado cuando el subtotal es igual o mayor a {minAmount}";
+    }
+
+    public void RefreshTotals()
+    {
+        ValidateTotals();
+        StateHasChanged();
+    }
+
+    public bool HasErrors()
+    {
+        return ValidationMessages.Any();
+    }
+
+    public void ClearValidationMessages()
+    {
+        ValidationMessages.Clear();
+        StateHasChanged();
+    }
+}

@@ -1,0 +1,390 @@
+﻿@using FacturacionPortal.WEB.Models.Facturacion
+@using FacturacionPortal.WEB.Helpers
+@using FacturacionPortal.WEB.Components.Shared
+
+<tr class="detalle-item @(IsSelected ? "table-active" : "") @(HasError ? "table-danger" : "")">
+    @if (ShowSelector)
+    {
+        <td class="text-center">
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" @bind="IsSelected" @onchange="OnSelectionChanged" />
+            </div>
+        </td>
+    }
+
+    @if (ShowIndex)
+    {
+        <td class="text-center">
+            <span class="badge bg-secondary">@Index</span>
+        </td>
+    }
+
+    <td>
+        @if (IsEditable && IsEditMode)
+        {
+            <select class="form-select form-select-sm @(HasError ? "is-invalid" : "")"
+                    @bind="EditableDetalle.ArticuloId"
+                    @onchange="OnArticuloChanged">
+                <option value="">Seleccionar artículo...</option>
+                @if (Articulos != null)
+                {
+                    @foreach (var articulo in Articulos)
+                    {
+                        <option value="@articulo.Id">@articulo.CodigoNombre</option>
+                    }
+                }
+            </select>
+        }
+        else
+        {
+            <div>
+                <strong>@Detalle.ArticuloCodigo</strong>
+                <div class="text-muted small">@Detalle.ArticuloNombre</div>
+                @if (!string.IsNullOrEmpty(Detalle.ArticuloDescripcion))
+                {
+                    <div class="text-muted smaller">@Detalle.ArticuloDescripcion</div>
+                }
+            </div>
+        }
+    </td>
+
+    <td class="text-center">
+        @if (IsEditable && IsEditMode)
+        {
+            <input type="number" class="form-control form-control-sm text-center @(HasError ? "is-invalid" : "")"
+                   @bind="EditableDetalle.Cantidad"
+                   @onchange="OnCantidadChanged"
+                   min="1"
+                   max="@MaxCantidad"
+                   style="width: 80px;" />
+        }
+        else
+        {
+            <span class="badge bg-primary">@Detalle.Cantidad</span>
+        }
+    </td>
+
+    <td class="text-end">
+        @if (IsEditable && IsEditMode)
+        {
+            <input type="number" class="form-control form-control-sm text-end @(HasError ? "is-invalid" : "")"
+                   @bind="EditableDetalle.PrecioUnitario"
+                   @onchange="OnPrecioChanged"
+                   min="0.01"
+                   step="0.01"
+                   style="width: 120px;" />
+        }
+        else
+        {
+            <CurrencyDisplay Value="@Detalle.PrecioUnitario" ShowSymbol="true" />
+        }
+    </td>
+
+    <td class="text-end">
+        <CurrencyDisplay Value="@Detalle.Subtotal" ShowSymbol="true" CssClass="fw-bold" />
+    </td>
+
+    @if (ShowStockInfo)
+    {
+        <td class="text-center">
+            @if (Detalle.StockActual.HasValue)
+            {
+                <span class="badge @GetStockBadgeClass()">
+                    @Detalle.StockActual.Value
+                </span>
+            }
+            else
+            {
+                <span class="text-muted">-</span>
+            }
+        </td>
+    }
+
+    @if (ShowActions)
+    {
+        <td class="text-center">
+            <div class="btn-group btn-group-sm" role="group">
+                @if (IsEditable)
+                {
+                    @if (IsEditMode)
+                    {
+                        <button class="btn btn-success btn-sm" @onclick="SaveChanges" disabled="@IsSaving" title="Guardar">
+                            @if (IsSaving)
+                            {
+                                <span class="spinner-border spinner-border-sm"></span>
+                            }
+                            else
+                            {
+                                <i class="bi bi-check"></i>
+                            }
+                        </button>
+                        <button class="btn btn-secondary btn-sm" @onclick="CancelEdit" title="Cancelar">
+                            <i class="bi bi-x"></i>
+                        </button>
+                    }
+                    else
+                    {
+                        <button class="btn btn-outline-primary btn-sm" @onclick="StartEdit" title="Editar">
+                            <i class="bi bi-pencil"></i>
+                        </button>
+                    }
+                }
+
+                @if (ShowDuplicateButton)
+                {
+                    <button class="btn btn-outline-info btn-sm" @onclick="DuplicateItem" title="Duplicar">
+                        <i class="bi bi-files"></i>
+                    </button>
+                }
+
+                @if (ShowDeleteButton)
+                {
+                    <button class="btn btn-outline-danger btn-sm" @onclick="DeleteItem" title="Eliminar">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                }
+            </div>
+        </td>
+    }
+</tr>
+
+@if (HasError && !string.IsNullOrEmpty(ErrorMessage))
+{
+    <tr>
+        <td colspan="@GetColspan()" class="text-danger small p-2">
+            <i class="bi bi-exclamation-triangle me-1"></i>@ErrorMessage
+        </td>
+    </tr>
+}
+
+@code {
+    [Parameter, EditorRequired] public FacturaDetalleDto Detalle { get; set; } = null!;
+    [Parameter] public List<ArticuloDto>? Articulos { get; set; }
+    [Parameter] public int Index { get; set; } = 1;
+    [Parameter] public bool IsSelected { get; set; } = false;
+    [Parameter] public bool IsEditable { get; set; } = true;
+    [Parameter] public bool ShowSelector { get; set; } = false;
+    [Parameter] public bool ShowIndex { get; set; } = true;
+    [Parameter] public bool ShowActions { get; set; } = true;
+    [Parameter] public bool ShowStockInfo { get; set; } = true;
+    [Parameter] public bool ShowDuplicateButton { get; set; } = true;
+    [Parameter] public bool ShowDeleteButton { get; set; } = true;
+    [Parameter] public int MaxCantidad { get; set; } = 999999;
+
+    [Parameter] public EventCallback<bool> IsSelectedChanged { get; set; }
+    [Parameter] public EventCallback<FacturaDetalleDto> OnEdit { get; set; }
+    [Parameter] public EventCallback<FacturaDetalleDto> OnSave { get; set; }
+    [Parameter] public EventCallback<FacturaDetalleDto> OnDelete { get; set; }
+    [Parameter] public EventCallback<FacturaDetalleDto> OnDuplicate { get; set; }
+    [Parameter] public EventCallback<FacturaDetalleDto> OnChanged { get; set; }
+
+    private bool IsEditMode = false;
+    private bool IsSaving = false;
+    private bool HasError = false;
+    private string ErrorMessage = string.Empty;
+    private FacturaDetalleDto EditableDetalle = new();
+    private FacturaDetalleDto OriginalDetalle = new();
+
+    protected override void OnParametersSet()
+    {
+        if (!IsEditMode)
+        {
+            EditableDetalle = new FacturaDetalleDto
+            {
+                Id = Detalle.Id,
+                FacturaId = Detalle.FacturaId,
+                ArticuloId = Detalle.ArticuloId,
+                ArticuloCodigo = Detalle.ArticuloCodigo,
+                ArticuloNombre = Detalle.ArticuloNombre,
+                ArticuloDescripcion = Detalle.ArticuloDescripcion,
+                Cantidad = Detalle.Cantidad,
+                PrecioUnitario = Detalle.PrecioUnitario,
+                Subtotal = Detalle.Subtotal,
+                StockActual = Detalle.StockActual
+            };
+        }
+    }
+
+    private async Task OnSelectionChanged(ChangeEventArgs e)
+    {
+        IsSelected = (bool)(e.Value ?? false);
+        if (IsSelectedChanged.HasDelegate)
+        {
+            await IsSelectedChanged.InvokeAsync(IsSelected);
+        }
+    }
+
+    private async Task OnArticuloChanged(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out int articuloId))
+        {
+            var articulo = Articulos?.FirstOrDefault(a => a.Id == articuloId);
+            if (articulo != null)
+            {
+                EditableDetalle.ArticuloId = articulo.Id;
+                EditableDetalle.ArticuloCodigo = articulo.Codigo;
+                EditableDetalle.ArticuloNombre = articulo.Nombre;
+                EditableDetalle.ArticuloDescripcion = articulo.Descripcion;
+                EditableDetalle.PrecioUnitario = articulo.PrecioUnitario;
+                EditableDetalle.StockActual = articulo.Stock;
+                
+                await CalculateSubtotal();
+                await NotifyChanged();
+            }
+        }
+    }
+
+    private async Task OnCantidadChanged()
+    {
+        await CalculateSubtotal();
+        await ValidateStock();
+        await NotifyChanged();
+    }
+
+    private async Task OnPrecioChanged()
+    {
+        await CalculateSubtotal();
+        await NotifyChanged();
+    }
+
+    private async Task CalculateSubtotal()
+    {
+        EditableDetalle.Subtotal = EditableDetalle.Cantidad * EditableDetalle.PrecioUnitario;
+    }
+
+    private async Task ValidateStock()
+    {
+        if (EditableDetalle.StockActual.HasValue && EditableDetalle.Cantidad > EditableDetalle.StockActual.Value)
+        {
+            HasError = true;
+            ErrorMessage = $"Stock insuficiente. Disponible: {EditableDetalle.StockActual.Value}";
+        }
+        else
+        {
+            HasError = false;
+            ErrorMessage = string.Empty;
+        }
+    }
+
+    private async Task NotifyChanged()
+    {
+        if (OnChanged.HasDelegate)
+        {
+            await OnChanged.InvokeAsync(EditableDetalle);
+        }
+    }
+
+    private async Task StartEdit()
+    {
+        OriginalDetalle = new FacturaDetalleDto
+        {
+            Id = Detalle.Id,
+            FacturaId = Detalle.FacturaId,
+            ArticuloId = Detalle.ArticuloId,
+            ArticuloCodigo = Detalle.ArticuloCodigo,
+            ArticuloNombre = Detalle.ArticuloNombre,
+            ArticuloDescripcion = Detalle.ArticuloDescripcion,
+            Cantidad = Detalle.Cantidad,
+            PrecioUnitario = Detalle.PrecioUnitario,
+            Subtotal = Detalle.Subtotal,
+            StockActual = Detalle.StockActual
+        };
+
+        IsEditMode = true;
+        
+        if (OnEdit.HasDelegate)
+        {
+            await OnEdit.InvokeAsync(Detalle);
+        }
+    }
+
+    private async Task SaveChanges()
+    {
+        if (HasError) return;
+
+        try
+        {
+            IsSaving = true;
+            StateHasChanged();
+
+            // Copiar valores editados al detalle original
+            Detalle.ArticuloId = EditableDetalle.ArticuloId;
+            Detalle.ArticuloCodigo = EditableDetalle.ArticuloCodigo;
+            Detalle.ArticuloNombre = EditableDetalle.ArticuloNombre;
+            Detalle.ArticuloDescripcion = EditableDetalle.ArticuloDescripcion;
+            Detalle.Cantidad = EditableDetalle.Cantidad;
+            Detalle.PrecioUnitario = EditableDetalle.PrecioUnitario;
+            Detalle.Subtotal = EditableDetalle.Subtotal;
+            Detalle.StockActual = EditableDetalle.StockActual;
+
+            IsEditMode = false;
+
+            if (OnSave.HasDelegate)
+            {
+                await OnSave.InvokeAsync(Detalle);
+            }
+        }
+        finally
+        {
+            IsSaving = false;
+            StateHasChanged();
+        }
+    }
+
+    private void CancelEdit()
+    {
+        EditableDetalle = new FacturaDetalleDto
+        {
+            Id = OriginalDetalle.Id,
+            FacturaId = OriginalDetalle.FacturaId,
+            ArticuloId = OriginalDetalle.ArticuloId,
+            ArticuloCodigo = OriginalDetalle.ArticuloCodigo,
+            ArticuloNombre = OriginalDetalle.ArticuloNombre,
+            ArticuloDescripcion = OriginalDetalle.ArticuloDescripcion,
+            Cantidad = OriginalDetalle.Cantidad,
+            PrecioUnitario = OriginalDetalle.PrecioUnitario,
+            Subtotal = OriginalDetalle.Subtotal,
+            StockActual = OriginalDetalle.StockActual
+        };
+
+        IsEditMode = false;
+        HasError = false;
+        ErrorMessage = string.Empty;
+    }
+
+    private async Task DuplicateItem()
+    {
+        if (OnDuplicate.HasDelegate)
+        {
+            await OnDuplicate.InvokeAsync(Detalle);
+        }
+    }
+
+    private async Task DeleteItem()
+    {
+        if (OnDelete.HasDelegate)
+        {
+            await OnDelete.InvokeAsync(Detalle);
+        }
+    }
+
+    private string GetStockBadgeClass()
+    {
+        if (!Detalle.StockActual.HasValue) return "bg-secondary";
+
+        var stock = Detalle.StockActual.Value;
+        if (stock <= 0) return "bg-danger";
+        if (stock <= 5) return "bg-warning";
+        return "bg-success";
+    }
+
+    private int GetColspan()
+    {
+        int cols = 4; // Artículo, Cantidad, Precio, Subtotal
+        if (ShowSelector) cols++;
+        if (ShowIndex) cols++;
+        if (ShowStockInfo) cols++;
+        if (ShowActions) cols++;
+        return cols;
+    }
+}

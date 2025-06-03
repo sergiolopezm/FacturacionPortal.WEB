@@ -1,0 +1,177 @@
+﻿@using Microsoft.AspNetCore.Components.Authorization
+@using FacturacionPortal.WEB.Shared.Layout
+@inherits LayoutComponentBase
+@inject NavigationManager Navigation
+
+<div class="page">
+    <div class="sidebar">
+        <NavMenu />
+    </div>
+
+    <main>
+        <div class="top-row px-4">
+            <div class="top-row-left">
+                <NavigationButtons ShowBackButton="true"
+                                   ShowHomeButton="false"
+                                   ShowRefreshButton="false"
+                                   BreadcrumbItems="@BreadcrumbItems" />
+            </div>
+
+            <div class="top-row-right">
+                <UserDropdown ShowUserName="true"
+                              ShowRole="true"
+                              ShowProfileOption="true"
+                              ShowSettingsOption="false" />
+            </div>
+        </div>
+
+        <article class="content px-4">
+            <CascadingValue Value="this">
+                @Body
+            </CascadingValue>
+        </article>
+    </main>
+</div>
+
+@code {
+    [Parameter] public List<BreadcrumbItem>? BreadcrumbItems { get; set; }
+
+    protected override void OnInitialized()
+    {
+        // Configurar breadcrumbs basado en la ruta actual
+        UpdateBreadcrumbs();
+
+        // Suscribirse a cambios de navegación
+        Navigation.LocationChanged += OnLocationChanged;
+    }
+
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+    {
+        UpdateBreadcrumbs();
+        StateHasChanged();
+    }
+
+    private void UpdateBreadcrumbs()
+    {
+        var uri = new Uri(Navigation.Uri);
+        var path = uri.AbsolutePath.ToLower();
+
+        BreadcrumbItems = path switch
+        {
+            "/" or "/home" => new List<BreadcrumbItem>
+            {
+                new() { Text = "Inicio", Url = "/", Icon = "bi-house", IsActive = true }
+            },
+
+            "/facturas" => new List<BreadcrumbItem>
+            {
+                new() { Text = "Inicio", Url = "/", Icon = "bi-house" },
+                new() { Text = "Facturas", Url = "/facturas", Icon = "bi-receipt", IsActive = true }
+            },
+
+            "/facturas/crear" => new List<BreadcrumbItem>
+            {
+                new() { Text = "Inicio", Url = "/", Icon = "bi-house" },
+                new() { Text = "Facturas", Url = "/facturas", Icon = "bi-receipt" },
+                new() { Text = "Crear Factura", Icon = "bi-plus-circle", IsActive = true }
+            },
+
+            "/clientes" => new List<BreadcrumbItem>
+            {
+                new() { Text = "Inicio", Url = "/", Icon = "bi-house" },
+                new() { Text = "Clientes", Url = "/clientes", Icon = "bi-people", IsActive = true }
+            },
+
+            "/clientes/crear" => new List<BreadcrumbItem>
+            {
+                new() { Text = "Inicio", Url = "/", Icon = "bi-house" },
+                new() { Text = "Clientes", Url = "/clientes", Icon = "bi-people" },
+                new() { Text = "Crear Cliente", Icon = "bi-person-plus", IsActive = true }
+            },
+
+            "/articulos" => new List<BreadcrumbItem>
+            {
+                new() { Text = "Inicio", Url = "/", Icon = "bi-house" },
+                new() { Text = "Artículos", Url = "/articulos", Icon = "bi-box", IsActive = true }
+            },
+
+            "/articulos/crear" => new List<BreadcrumbItem>
+            {
+                new() { Text = "Inicio", Url = "/", Icon = "bi-house" },
+                new() { Text = "Artículos", Url = "/articulos", Icon = "bi-box" },
+                new() { Text = "Crear Artículo", Icon = "bi-plus-circle", IsActive = true }
+            },
+
+            "/categorias" => new List<BreadcrumbItem>
+            {
+                new() { Text = "Inicio", Url = "/", Icon = "bi-house" },
+                new() { Text = "Categorías", Url = "/categorias", Icon = "bi-tags", IsActive = true }
+            },
+
+            "/reportes" => new List<BreadcrumbItem>
+            {
+                new() { Text = "Inicio", Url = "/", Icon = "bi-house" },
+                new() { Text = "Reportes", Url = "/reportes", Icon = "bi-graph-up", IsActive = true }
+            },
+
+            "/reportes/ventas" => new List<BreadcrumbItem>
+            {
+                new() { Text = "Inicio", Url = "/", Icon = "bi-house" },
+                new() { Text = "Reportes", Url = "/reportes", Icon = "bi-graph-up" },
+                new() { Text = "Reporte de Ventas", Icon = "bi-currency-dollar", IsActive = true }
+            },
+
+            "/reportes/dashboard" => new List<BreadcrumbItem>
+            {
+                new() { Text = "Inicio", Url = "/", Icon = "bi-house" },
+                new() { Text = "Reportes", Url = "/reportes", Icon = "bi-graph-up" },
+                new() { Text = "Dashboard", Icon = "bi-speedometer2", IsActive = true }
+            },
+
+            "/perfil" => new List<BreadcrumbItem>
+            {
+                new() { Text = "Inicio", Url = "/", Icon = "bi-house" },
+                new() { Text = "Mi Perfil", Icon = "bi-person", IsActive = true }
+            },
+
+            _ => new List<BreadcrumbItem>
+            {
+                new() { Text = "Inicio", Url = "/", Icon = "bi-house" },
+                new() { Text = "Página", IsActive = true }
+            }
+        };
+    }
+
+    public void SetCustomBreadcrumbs(List<BreadcrumbItem> breadcrumbs)
+    {
+        BreadcrumbItems = breadcrumbs;
+        StateHasChanged();
+    }
+
+    public void AddBreadcrumb(string text, string? url = null, string? icon = null, bool isActive = false)
+    {
+        BreadcrumbItems ??= new List<BreadcrumbItem>();
+
+        // Desactivar el último elemento
+        var lastItem = BreadcrumbItems.LastOrDefault();
+        if (lastItem != null)
+        {
+            lastItem.IsActive = false;
+        }
+
+        BreadcrumbItems.Add(new BreadcrumbItem
+        {
+            Text = text,
+            Url = url,
+            Icon = icon,
+            IsActive = isActive
+        });
+
+        StateHasChanged();
+    }
+
+    public void Dispose()
+    {
+        Navigation.LocationChanged -= OnLocationChanged;
+    }
+}

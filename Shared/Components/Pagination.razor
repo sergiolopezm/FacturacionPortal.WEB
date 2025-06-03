@@ -1,0 +1,218 @@
+﻿@typeparam TItem where TItem : class
+@using FacturacionPortal.WEB.Models.Common
+@using FacturacionPortal.WEB.Util
+
+@if (PaginationInfo != null && PaginationInfo.TotalPaginas > 1)
+{
+    <div class="pagination-container @ContainerClass">
+        @if (ShowInfo)
+        {
+            <div class="pagination-info">
+                <small class="text-muted">
+                    Mostrando @GetStartRecord() - @GetEndRecord() de @PaginationInfo.TotalRegistros registros
+                </small>
+            </div>
+        }
+
+        <nav aria-label="Navegación de páginas" class="@NavClass">
+            <ul class="pagination @PaginationClass mb-0">
+                <!-- Botón Primera página -->
+                @if (ShowFirstLast)
+                {
+                    <li class="page-item @(PaginationInfo.Pagina == 1 ? "disabled" : "")">
+                        <button class="page-link" @onclick="() => GoToPage(1)" disabled="@(PaginationInfo.Pagina == 1)" title="Primera página">
+                            <i class="bi bi-chevron-double-left"></i>
+                        </button>
+                    </li>
+                }
+
+                <!-- Botón Anterior -->
+                <li class="page-item @(PaginationInfo.Pagina == 1 ? "disabled" : "")">
+                    <button class="page-link" @onclick="GoToPrevious" disabled="@(PaginationInfo.Pagina == 1)" title="Página anterior">
+                        <i class="bi bi-chevron-left"></i>
+                        @if (ShowLabels)
+                        {
+                            <span class="d-none d-sm-inline ms-1">Anterior</span>
+                        }
+                    </button>
+                </li>
+
+                <!-- Páginas numéricas -->
+                @foreach (var pageNumber in GetVisiblePages())
+                {
+                    <li class="page-item @(pageNumber == PaginationInfo.Pagina ? "active" : "")">
+                        <button class="page-link" @onclick="() => GoToPage(pageNumber)">
+                            @pageNumber
+                        </button>
+                    </li>
+                }
+
+                <!-- Botón Siguiente -->
+                <li class="page-item @(PaginationInfo.Pagina == PaginationInfo.TotalPaginas ? "disabled" : "")">
+                    <button class="page-link" @onclick="GoToNext" disabled="@(PaginationInfo.Pagina == PaginationInfo.TotalPaginas)" title="Página siguiente">
+                        @if (ShowLabels)
+                        {
+                            <span class="d-none d-sm-inline me-1">Siguiente</span>
+                        }
+                        <i class="bi bi-chevron-right"></i>
+                    </button>
+                </li>
+
+                <!-- Botón Última página -->
+                @if (ShowFirstLast)
+                {
+                    <li class="page-item @(PaginationInfo.Pagina == PaginationInfo.TotalPaginas ? "disabled" : "")">
+                        <button class="page-link" @onclick="() => GoToPage(PaginationInfo.TotalPaginas)" disabled="@(PaginationInfo.Pagina == PaginationInfo.TotalPaginas)" title="Última página">
+                            <i class="bi bi-chevron-double-right"></i>
+                        </button>
+                    </li>
+                }
+            </ul>
+        </nav>
+
+        @if (ShowPageSizeSelector && PageSizeOptions != null && PageSizeOptions.Any())
+        {
+            <div class="page-size-selector">
+                <div class="d-flex align-items-center">
+                    <small class="text-muted me-2">Mostrar:</small>
+                    <select class="form-select form-select-sm" style="width: auto;" @onchange="OnPageSizeChanged">
+                        @foreach (var option in PageSizeOptions)
+                        {
+                            <option value="@option" selected="@(option == CurrentPageSize)">@option</option>
+                        }
+                    </select>
+                    <small class="text-muted ms-2">por página</small>
+                </div>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    [Parameter] public PaginacionDto<TItem>? PaginationInfo { get; set; }
+    [Parameter] public EventCallback<int> OnPageChanged { get; set; }
+    [Parameter] public EventCallback<int> OnPageSizeChanged { get; set; }
+
+    [Parameter] public bool ShowInfo { get; set; } = true;
+    [Parameter] public bool ShowFirstLast { get; set; } = true;
+    [Parameter] public bool ShowLabels { get; set; } = false;
+    [Parameter] public bool ShowPageSizeSelector { get; set; } = true;
+    [Parameter] public int MaxVisiblePages { get; set; } = 5;
+
+    [Parameter] public int CurrentPageSize { get; set; } = Constants.Paginacion.ElementosPorPaginaDefault;
+    [Parameter] public int[]? PageSizeOptions { get; set; } = Constants.Paginacion.OpcionesPorPagina;
+
+    [Parameter] public string ContainerClass { get; set; } = "d-flex justify-content-between align-items-center flex-wrap gap-2";
+    [Parameter] public string NavClass { get; set; } = "";
+    [Parameter] public string PaginationClass { get; set; } = "pagination-sm";
+
+    private async Task GoToPage(int page)
+    {
+        if (page < 1 || page > (PaginationInfo?.TotalPaginas ?? 1) || page == PaginationInfo?.Pagina)
+            return;
+
+        if (OnPageChanged.HasDelegate)
+        {
+            await OnPageChanged.InvokeAsync(page);
+        }
+    }
+
+    private async Task GoToPrevious()
+    {
+        if (PaginationInfo?.Pagina > 1)
+        {
+            await GoToPage(PaginationInfo.Pagina - 1);
+        }
+    }
+
+    private async Task GoToNext()
+    {
+        if (PaginationInfo?.Pagina < PaginationInfo?.TotalPaginas)
+        {
+            await GoToPage(PaginationInfo.Pagina + 1);
+        }
+    }
+
+    private async Task OnPageSizeChanged(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out int newPageSize))
+        {
+            CurrentPageSize = newPageSize;
+
+            if (OnPageSizeChanged.HasDelegate)
+            {
+                await OnPageSizeChanged.InvokeAsync(newPageSize);
+            }
+        }
+    }
+
+    private IEnumerable<int> GetVisiblePages()
+    {
+        if (PaginationInfo == null || PaginationInfo.TotalPaginas <= 1)
+            return new List<int>();
+
+        var totalPages = PaginationInfo.TotalPaginas;
+        var currentPage = PaginationInfo.Pagina;
+        var maxVisible = MaxVisiblePages;
+
+        if (totalPages <= maxVisible)
+        {
+            return Enumerable.Range(1, totalPages);
+        }
+
+        var startPage = Math.Max(1, currentPage - maxVisible / 2);
+        var endPage = Math.Min(totalPages, startPage + maxVisible - 1);
+
+        if (endPage - startPage + 1 < maxVisible)
+        {
+            startPage = Math.Max(1, endPage - maxVisible + 1);
+        }
+
+        var pages = new List<int>();
+
+        // Agregar primera página si no está en el rango
+        if (startPage > 1)
+        {
+            pages.Add(1);
+            if (startPage > 2)
+            {
+                pages.Add(-1); // Indicador de separación (...)
+            }
+        }
+
+        // Agregar páginas del rango
+        for (int i = startPage; i <= endPage; i++)
+        {
+            pages.Add(i);
+        }
+
+        // Agregar última página si no está en el rango
+        if (endPage < totalPages)
+        {
+            if (endPage < totalPages - 1)
+            {
+                pages.Add(-1); // Indicador de separación (...)
+            }
+            pages.Add(totalPages);
+        }
+
+        return pages.Where(p => p > 0); // Filtrar indicadores de separación para esta implementación
+    }
+
+    private int GetStartRecord()
+    {
+        if (PaginationInfo == null || PaginationInfo.TotalRegistros == 0)
+            return 0;
+
+        return (PaginationInfo.Pagina - 1) * PaginationInfo.ElementosPorPagina + 1;
+    }
+
+    private int GetEndRecord()
+    {
+        if (PaginationInfo == null || PaginationInfo.TotalRegistros == 0)
+            return 0;
+
+        var endRecord = PaginationInfo.Pagina * PaginationInfo.ElementosPorPagina;
+        return Math.Min(endRecord, PaginationInfo.TotalRegistros);
+    }
+}

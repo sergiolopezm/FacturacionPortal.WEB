@@ -1,0 +1,86 @@
+﻿@inherits LayoutComponentBase
+
+<div class="empty-layout">
+    <main class="main-content">
+        @Body
+    </main>
+</div>
+
+<style>
+    .empty-layout {
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .main-content {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+    }
+
+    /* Utilidades para páginas que usen EmptyLayout */
+    .empty-layout .centered-content {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+        padding: 1rem;
+    }
+
+    .empty-layout .auth-container {
+        width: 100%;
+        max-width: 400px;
+        margin: 0 auto;
+        padding: 2rem;
+    }
+
+    .empty-layout .fullscreen-container {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        overflow: auto;
+    }
+
+    /* Responsive adjustments */
+    @media (max-width: 576px) {
+        .empty-layout .auth-container {
+            padding: 1rem;
+            max-width: 100%;
+        }
+    }
+
+    /* Background patterns for auth pages */
+    .empty-layout.auth-bg {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background-attachment: fixed;
+    }
+
+    .empty-layout.auth-bg::before {
+        content: '';
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-image:
+            radial-gradient(circle at 25% 25%, rgba(255,255,255,0.1) 0%, transparent 50%),
+            radial-gradient(circle at 75% 75%, rgba(255,255,255,0.1) 0%, transparent 50%);
+        pointer-events: none;
+        z-index: -1;
+    }
+
+    /* Error page styling */
+    .empty-layout.error-bg {
+        background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
+        color: white;
+    }
+
+    /* Maintenance page styling */
+    .empty-layout.maintenance-bg {
+        background: linear-gradient(135deg, #ffa726 0%, #fb8c00 100%);
+        color: white;
+    }
+</style>

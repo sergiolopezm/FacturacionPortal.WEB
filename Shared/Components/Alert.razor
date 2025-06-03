@@ -1,0 +1,152 @@
+﻿@if (IsVisible)
+{
+    <div class="alert @GetAlertClass() @(IsDismissible ? "alert-dismissible" : "") fade show @CssClass" role="alert">
+        @if (!string.IsNullOrEmpty(Icon))
+        {
+            <i class="@Icon me-2"></i>
+        }
+
+        @if (!string.IsNullOrEmpty(Title))
+        {
+            <h6 class="alert-heading mb-1">@Title</h6>
+        }
+
+        <div class="alert-content">
+            @if (!string.IsNullOrEmpty(Message))
+            {
+                @Message
+            }
+            @ChildContent
+        </div>
+
+        @if (IsDismissible)
+        {
+            <button type="button" class="btn-close" @onclick="Dismiss" aria-label="Close"></button>
+        }
+    </div>
+}
+
+@code {
+    [Parameter] public AlertType Type { get; set; } = AlertType.Info;
+    [Parameter] public string? Message { get; set; }
+    [Parameter] public string? Title { get; set; }
+    [Parameter] public string? Icon { get; set; }
+    [Parameter] public bool IsVisible { get; set; } = true;
+    [Parameter] public bool IsDismissible { get; set; } = true;
+    [Parameter] public bool AutoHide { get; set; } = false;
+    [Parameter] public int AutoHideDelay { get; set; } = 5000;
+    [Parameter] public string CssClass { get; set; } = string.Empty;
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public EventCallback OnDismiss { get; set; }
+
+    private Timer? _autoHideTimer;
+
+    protected override void OnParametersSet()
+    {
+        if (AutoHide && IsVisible)
+        {
+            SetAutoHideTimer();
+        }
+
+        if (string.IsNullOrEmpty(Icon))
+        {
+            Icon = GetDefaultIcon();
+        }
+    }
+
+    private void SetAutoHideTimer()
+    {
+        _autoHideTimer?.Dispose();
+        _autoHideTimer = new Timer(async _ =>
+        {
+            await InvokeAsync(async () =>
+            {
+                await Dismiss();
+            });
+        }, null, AutoHideDelay, Timeout.Infinite);
+    }
+
+    private async Task Dismiss()
+    {
+        IsVisible = false;
+        _autoHideTimer?.Dispose();
+
+        if (OnDismiss.HasDelegate)
+        {
+            await OnDismiss.InvokeAsync();
+        }
+
+        StateHasChanged();
+    }
+
+    private string GetAlertClass()
+    {
+        return Type switch
+        {
+            AlertType.Success => "alert-success",
+            AlertType.Danger => "alert-danger",
+            AlertType.Warning => "alert-warning",
+            AlertType.Info => "alert-info",
+            AlertType.Primary => "alert-primary",
+            AlertType.Secondary => "alert-secondary",
+            AlertType.Light => "alert-light",
+            AlertType.Dark => "alert-dark",
+            _ => "alert-info"
+        };
+    }
+
+    private string GetDefaultIcon()
+    {
+        return Type switch
+        {
+            AlertType.Success => "bi bi-check-circle",
+            AlertType.Danger => "bi bi-exclamation-triangle",
+            AlertType.Warning => "bi bi-exclamation-circle",
+            AlertType.Info => "bi bi-info-circle",
+            AlertType.Primary => "bi bi-info-circle",
+            AlertType.Secondary => "bi bi-info-circle",
+            AlertType.Light => "bi bi-info-circle",
+            AlertType.Dark => "bi bi-info-circle",
+            _ => "bi bi-info-circle"
+        };
+    }
+
+    public void Show(string message, AlertType type = AlertType.Info, string? title = null)
+    {
+        Message = message;
+        Type = type;
+        Title = title;
+        IsVisible = true;
+
+        if (AutoHide)
+        {
+            SetAutoHideTimer();
+        }
+
+        StateHasChanged();
+    }
+
+    public void Hide()
+    {
+        IsVisible = false;
+        _autoHideTimer?.Dispose();
+        StateHasChanged();
+    }
+
+    public void Dispose()
+    {
+        _autoHideTimer?.Dispose();
+    }
+}
+
+public enum AlertType
+{
+    Primary,
+    Secondary,
+    Success,
+    Danger,
+    Warning,
+    Info,
+    Light,
+    Dark
+}
