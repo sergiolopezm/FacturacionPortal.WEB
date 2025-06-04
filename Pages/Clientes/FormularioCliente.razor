@@ -187,7 +187,12 @@
                                         </button>
                                     }
 
-                                    <button type="submit" class="btn btn-success" disabled="@(IsSaving || !IsFormValid)">
+                                    <!-- Reemplaza el botón actual con este -->
+                                    <button type="button"
+                                            class="btn btn-success"
+                                            @onclick="GuardarClienteDirecto"
+                                            disabled="@(IsSaving || !HayDatosCompletos())"
+                                            id="btnGuardarCliente">
                                         @if (IsSaving)
                                         {
                                             <span class="spinner-border spinner-border-sm me-1"></span>
@@ -375,14 +380,21 @@
 
     private void InitializeForm()
     {
-        ClienteForm = new ClienteDto
+        if (EditContext == null)
         {
-            Activo = true
-        };
-
-        EditContext = new EditContext(ClienteForm);
-        EditContext.OnFieldChanged += OnFieldChanged;
-        EditContext.OnValidationRequested += OnValidationRequested;
+            ClienteForm = new ClienteDto
+            {
+                Activo = true
+            };
+            EditContext = new EditContext(ClienteForm);
+            EditContext.OnFieldChanged += OnFieldChanged;
+            EditContext.OnValidationRequested += OnValidationRequested;
+        }
+        else
+        {
+            // Solo actualizar el modelo si ya existe el EditContext
+            ClienteForm.Activo = true;
+        }
     }
 
     private async Task CargarCliente()
@@ -442,7 +454,11 @@
     private void OnFieldChanged(object? sender, FieldChangedEventArgs e)
     {
         ValidateForm();
-        StateHasChanged();
+        InvokeAsync(() =>
+        {
+            StateHasChanged();
+            Console.WriteLine($"Campo cambiado: {e.FieldIdentifier.FieldName}, IsFormValid: {IsFormValid}");
+        });
     }
 
     private void OnValidationRequested(object? sender, ValidationRequestedEventArgs e)
@@ -454,31 +470,33 @@
     {
         ErroresValidacion.Clear();
 
-        if (string.IsNullOrWhiteSpace(ClienteForm.NumeroDocumento))
-            ErroresValidacion.Add("El número de documento es requerido");
+        // Validación simple y directa
+        if (!string.IsNullOrWhiteSpace(ClienteForm.NumeroDocumento) &&
+            !string.IsNullOrWhiteSpace(ClienteForm.Nombres) &&
+            !string.IsNullOrWhiteSpace(ClienteForm.Apellidos) &&
+            !string.IsNullOrWhiteSpace(ClienteForm.Direccion) &&
+            !string.IsNullOrWhiteSpace(ClienteForm.Telefono))
+        {
+            // Si todos los campos requeridos están llenos, el formulario es válido
+            IsFormValid = true;
+            Console.WriteLine("Formulario válido - todos los campos llenos");
+        }
+        else
+        {
+            IsFormValid = false;
 
-        if (string.IsNullOrWhiteSpace(ClienteForm.Nombres))
-            ErroresValidacion.Add("Los nombres son requeridos");
-
-        if (string.IsNullOrWhiteSpace(ClienteForm.Apellidos))
-            ErroresValidacion.Add("Los apellidos son requeridos");
-
-        if (string.IsNullOrWhiteSpace(ClienteForm.Direccion))
-            ErroresValidacion.Add("La dirección es requerida");
-
-        if (string.IsNullOrWhiteSpace(ClienteForm.Telefono))
-            ErroresValidacion.Add("El teléfono es requerido");
-
-        if (!string.IsNullOrEmpty(ClienteForm.Email) && !ValidationHelper.IsValidEmail(ClienteForm.Email))
-            ErroresValidacion.Add("El formato del email no es válido");
-
-        if (!string.IsNullOrEmpty(ClienteForm.NumeroDocumento) && !ValidationHelper.IsValidDocumento(ClienteForm.NumeroDocumento))
-            ErroresValidacion.Add("El formato del documento no es válido");
-
-        if (!string.IsNullOrEmpty(ClienteForm.Telefono) && !ValidationHelper.IsValidTelefono(ClienteForm.Telefono))
-            ErroresValidacion.Add("El formato del teléfono no es válido");
-
-        IsFormValid = !ErroresValidacion.Any();
+            // Solo agregar errores si realmente faltan campos
+            if (string.IsNullOrWhiteSpace(ClienteForm.NumeroDocumento))
+                ErroresValidacion.Add("El número de documento es requerido");
+            if (string.IsNullOrWhiteSpace(ClienteForm.Nombres))
+                ErroresValidacion.Add("Los nombres son requeridos");
+            if (string.IsNullOrWhiteSpace(ClienteForm.Apellidos))
+                ErroresValidacion.Add("Los apellidos son requeridos");
+            if (string.IsNullOrWhiteSpace(ClienteForm.Direccion))
+                ErroresValidacion.Add("La dirección es requerida");
+            if (string.IsNullOrWhiteSpace(ClienteForm.Telefono))
+                ErroresValidacion.Add("El teléfono es requerido");
+        }
     }
 
     private string GetFieldCssClass(string fieldName)
@@ -496,17 +514,35 @@
 
     private async Task GuardarCliente()
     {
-        if (!IsFormValid || IsSaving) return;
+        // Agregar logs para depuración
+        Console.WriteLine($"GuardarCliente() llamado. IsFormValid: {IsFormValid}, IsSaving: {IsSaving}");
+        
+        if (!IsFormValid || IsSaving) 
+        {
+            Console.WriteLine("Validación fallida o ya está guardando");
+            AlertComponent?.Show(
+                $"Por favor complete todos los campos requeridos correctamente.",
+                AlertType.Warning,
+                "Validación"
+            );
+            return;
+        }
 
-        if (EditContext != null && !EditContext.Validate()) return;
+        if (EditContext != null && !EditContext.Validate()) 
+        {
+            Console.WriteLine("EditContext.Validate() falló");
+            return;
+        }
 
         try
         {
             IsSaving = true;
             StateHasChanged();
+            Console.WriteLine("Intentando guardar cliente...");
 
             if (EsEdicion && ClienteId.HasValue)
             {
+                // Código de actualización existente
                 var result = await ClienteService.Update(ClienteId.Value, ClienteForm);
                 if (result.Success)
                 {
@@ -530,9 +566,12 @@
             }
             else
             {
+                Console.WriteLine($"Llamando a ClienteService.Create con datos: {ClienteForm.NumeroDocumento}, {ClienteForm.Nombres}");
                 var result = await ClienteService.Create(ClienteForm);
+                
                 if (result.Success && result.Data != null)
                 {
+                    Console.WriteLine($"Cliente creado con ID: {result.Data.Id}");
                     AlertComponent?.Show(
                         $"Cliente {result.Data.Nombres} {result.Data.Apellidos} creado exitosamente",
                         AlertType.Success,
@@ -544,6 +583,7 @@
                 }
                 else
                 {
+                    Console.WriteLine($"Error al crear cliente: {result.Message}");
                     AlertComponent?.Show(
                         result.Message ?? "Error al crear el cliente",
                         AlertType.Danger,
@@ -629,6 +669,72 @@
                string.IsNullOrWhiteSpace(ClienteForm.Email);
     }
 
+    private bool HayDatosCompletos()
+    {
+        return !string.IsNullOrWhiteSpace(ClienteForm.NumeroDocumento) &&
+               !string.IsNullOrWhiteSpace(ClienteForm.Nombres) &&
+               !string.IsNullOrWhiteSpace(ClienteForm.Apellidos) &&
+               !string.IsNullOrWhiteSpace(ClienteForm.Direccion) &&
+               !string.IsNullOrWhiteSpace(ClienteForm.Telefono);
+    }
+
+    private async Task GuardarClienteDirecto()
+    {
+        if (IsSaving) return;
+
+        // Validación directa
+        if (!HayDatosCompletos())
+        {
+            AlertComponent?.Show(
+                "Por favor complete todos los campos requeridos.",
+                AlertType.Warning,
+                "Campos Requeridos"
+            );
+            return;
+        }
+
+        try
+        {
+            IsSaving = true;
+            StateHasChanged();
+
+            var result = await ClienteService.Create(ClienteForm);
+
+            if (result.Success && result.Data != null)
+            {
+                AlertComponent?.Show(
+                    $"Cliente {result.Data.Nombres} {result.Data.Apellidos} creado exitosamente",
+                    AlertType.Success,
+                    "Cliente Creado"
+                );
+
+                await Task.Delay(1500);
+                Navigation.NavigateTo($"/clientes/{result.Data.Id}");
+            }
+            else
+            {
+                AlertComponent?.Show(
+                    result.Message ?? "Error al crear el cliente",
+                    AlertType.Danger,
+                    "Error"
+                );
+            }
+        }
+        catch (Exception ex)
+        {
+            AlertComponent?.Show(
+                $"Error al guardar: {ex.Message}",
+                AlertType.Danger,
+                "Error"
+            );
+        }
+        finally
+        {
+            IsSaving = false;
+            StateHasChanged();
+        }
+    }
+
     private string GetReturnUrl()
     {
         var uri = new Uri(Navigation.Uri);
@@ -653,6 +759,33 @@
             Navigation.NavigateTo($"/facturas?clienteId={ClienteId.Value}");
         }
     }
+
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            // Forzar validación inicial
+            ValidateForm();
+            StateHasChanged();
+        }
+        await base.OnAfterRenderAsync(firstRender);
+    }
+
+    // protected override async Task OnAfterRenderAsync(bool firstRender)
+    // {
+    //     if (firstRender)
+    //     {
+    //         await JSRuntime.InvokeVoidAsync("console.log", "Formulario cliente renderizado por primera vez");
+            
+    //         // Registrar evento click manualmente como respaldo
+    //         await JSRuntime.InvokeVoidAsync("eval", @"
+    //             document.getElementById('btnGuardarCliente')?.addEventListener('click', function() {
+    //                 console.log('Botón Guardar Cliente clickeado via JS');
+    //             });
+    //         ");
+    //     }
+    // }
 
     public void Dispose()
     {

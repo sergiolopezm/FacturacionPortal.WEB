@@ -49,23 +49,25 @@
 
     <Alert @ref="AlertComponent" />
 
-    <form @onsubmit="HandleFormSubmit" @onsubmit:preventDefault="true">
-    <div class="row">
-        <div class="col-lg-8">
-            <div class="card mb-4">
-                <div class="card-header">
-                    <h5 class="card-title mb-0">
-                        <i class="bi bi-receipt me-2"></i>Información de la Factura
-                    </h5>
-                </div>
-                <div class="card-body">
-                    <div class="row">
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label class="form-label">Fecha</label>
-                                <input type="text" class="form-control" value="@DateTime.Now.ToString("dd/MM/yyyy HH:mm")" readonly />
-                                <div class="form-text">Fecha actual del sistema</div>
-                            </div>
+    <EditForm Model="@NuevaFactura" OnValidSubmit="@HandleValidSubmit">
+        <DataAnnotationsValidator />
+        
+        <div class="row">
+            <div class="col-lg-8">
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">
+                            <i class="bi bi-receipt me-2"></i>Información de la Factura
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label">Fecha</label>
+                                    <input type="text" class="form-control" value="@DateTime.Now.ToString("dd/MM/yyyy HH:mm")" readonly />
+                                    <div class="form-text">Fecha actual del sistema</div>
+                                </div>
                             </div>
                             <div class="col-md-6">
                                 <div class="mb-3">
@@ -146,7 +148,6 @@
                                             </div>
                                         </div>
                                     }
-                        <ValidationMessage For="@(() => NuevaFactura.ClienteId)" />
                                 </div>
                             </div>
                         </div>
@@ -157,13 +158,13 @@
                                 <div class="col-md-6">
                                     <div class="mb-3">
                                         <label class="form-label">Nombres *</label>
-                                        <InputText class="form-control" @bind-Value="ClienteSeleccionado.Nombres" readonly />
+                                        <input type="text" class="form-control" value="@ClienteSeleccionado.Nombres" readonly />
                                     </div>
                                 </div>
                                 <div class="col-md-6">
                                     <div class="mb-3">
                                         <label class="form-label">Apellidos *</label>
-                                        <InputText class="form-control" @bind-Value="ClienteSeleccionado.Apellidos" readonly />
+                                        <input type="text" class="form-control" value="@ClienteSeleccionado.Apellidos" readonly />
                                     </div>
                                 </div>
                             </div>
@@ -171,13 +172,13 @@
                                 <div class="col-md-8">
                                     <div class="mb-3">
                                         <label class="form-label">Dirección *</label>
-                                        <InputText class="form-control" @bind-Value="ClienteSeleccionado.Direccion" readonly />
+                                        <input type="text" class="form-control" value="@ClienteSeleccionado.Direccion" readonly />
                                     </div>
                                 </div>
                                 <div class="col-md-4">
                                     <div class="mb-3">
                                         <label class="form-label">Teléfono *</label>
-                                        <InputText class="form-control" @bind-Value="ClienteSeleccionado.Telefono" readonly />
+                                        <input type="text" class="form-control" value="@ClienteSeleccionado.Telefono" readonly />
                                     </div>
                                 </div>
                             </div>
@@ -194,9 +195,9 @@
                     </div>
                     <div class="card-body p-0">
                         <DetalleEditor Detalles="@DetallesFactura"
-                          OnDetallesChanged="@OnDetallesChanged"
-                          ShowHeader="false"
-                          EmptyMessage="No hay artículos agregados. Agregue al menos un artículo para continuar." />
+                                      OnDetallesChanged="@OnDetallesChanged"
+                                      ShowHeader="false"
+                                      EmptyMessage="No hay artículos agregados. Agregue al menos un artículo para continuar." />
                     </div>
                 </div>
 
@@ -212,7 +213,6 @@
                             <label class="form-label">Observaciones</label>
                             <InputTextArea class="form-control" @bind-Value="NuevaFactura.Observaciones" 
                                           rows="3" placeholder="Ingrese observaciones adicionales (opcional)" />
-                            <ValidationMessage For="@(() => NuevaFactura.Observaciones)" />
                             <div class="form-text">Máximo 500 caracteres</div>
                         </div>
                     </div>
@@ -266,8 +266,8 @@
                     @if (IsFormValid && NuevaFactura.Detalles?.Any() == true)
                     {
                         <div class="card-footer">
-                            <button class="btn btn-primary w-100" @onclick="SaveFacturaAsync" disabled="@IsSaving">
-                               @if (IsSaving)
+                            <button type="submit" class="btn btn-primary w-100" disabled="@IsSaving">
+                                @if (IsSaving)
                                 {
                                     <span class="spinner-border spinner-border-sm me-2"></span>
                                     <span>Guardando...</span>
@@ -283,7 +283,7 @@
                 </div>
             </div>
         </div>   
-    </form>
+    </EditForm>
 
     <!-- Confirmación -->
     <Confirm @ref="ConfirmDialog" />
@@ -329,10 +329,6 @@
     private ClienteDto? ClienteSeleccionado;
     private FacturaTotalesDto TotalesCalculados = new();
     private List<FacturaDetalleDto> DetallesFactura = new();
-    
-    // Nuevo EditContext personalizado para evitar CS1662
-    private EditContext? _editContext;
-    private ValidationMessageStore? _messageStore;
 
     private Alert? AlertComponent;
     private Confirm? ConfirmDialog;
@@ -349,8 +345,6 @@
     private List<ClienteDto>? ClientesFiltrados;
     private string ClienteError = "";
     private string BusquedaCliente = "";
-    private bool MostrandoCrearCliente = false;
-    private SelectCliente? SelectClienteComponent;
 
     protected override async Task OnInitializedAsync()
     {
@@ -361,14 +355,6 @@
 
         // Mantener la lista separada para el componente DetalleEditor
         DetallesFactura = new List<FacturaDetalleDto>();
-        
-        // Inicializar el contexto de edición personalizado
-        _editContext = new EditContext(NuevaFactura);
-        _messageStore = new ValidationMessageStore(_editContext);
-        
-        // Configurar manejadores de validación personalizados
-        _editContext.OnValidationRequested += HandleValidationRequested;
-        _editContext.OnFieldChanged += HandleFieldChanged;
 
         // Cargar clientes disponibles
         await CargarClientes();
@@ -439,12 +425,6 @@
                         ClienteError = "Error al cargar datos del cliente: " + ex.Message;
                         NuevaFactura.ClienteId = 0;
                     }
-                }
-                
-                // Notificar el cambio para validación
-                if (_editContext != null)
-                {
-                    _editContext.NotifyFieldChanged(_editContext.Field(nameof(NuevaFactura.ClienteId)));
                 }
             }
             else
@@ -542,204 +522,15 @@
 
             if (confirmed)
             {
-                // Guardar estado actual en SessionStorage si es necesario
-                // await JSRuntime.InvokeVoidAsync("sessionStorage.setItem", "facturaEnCreacion", JsonSerializer.Serialize(NuevaFactura));
-                
-                // Navegar a la página de creación de clientes
                 Navigation.NavigateTo("/clientes/crear?returnUrl=/facturas/crear");
             }
         }
-    }
-
-    // Reemplaza OnClienteSelectedHandler con este método si se usa SelectCliente como componente
-    private async Task OnClienteSelectedHandler(ClienteDto cliente)
-    {
-        if (cliente != null)
-        {
-            NuevaFactura.ClienteId = cliente.Id;
-            ClienteSeleccionado = cliente;
-            
-            // Añadir a la lista local si no existe
-            if (ClientesDisponibles?.Any(c => c.Id == cliente.Id) != true && ClientesDisponibles != null)
-            {
-                ClientesDisponibles.Add(cliente);
-            }
-            
-            // Notificar el cambio para validación
-            if (_editContext != null)
-            {
-                _editContext.NotifyFieldChanged(_editContext.Field(nameof(NuevaFactura.ClienteId)));
-            }
-            
-            await CalculateTotals();
-        }
-        else
-        {
-            NuevaFactura.ClienteId = 0;
-            ClienteSeleccionado = null;
-        }
-        
-        StateHasChanged();
     }
 
     private async Task HandleValidSubmit(EditContext editContext)
     {
         await SaveFacturaAsync();
     }
-
-    private async Task HandleFormSubmit()
-    {
-        if (!ValidateForm())
-        {
-            return; // No proceder si hay errores
-        }
-    
-        await SaveFacturaAsync();
-    }
-
-    protected override void OnInitialized()
-    {
-        NuevaFactura = new CrearFacturaDto
-        {
-            Detalles = new List<CrearFacturaDetalleDto>()
-        };
-
-        // Mantener la lista separada para el componente DetalleEditor
-        DetallesFactura = new List<FacturaDetalleDto>();
-        
-        // Inicializar el contexto de edición personalizado
-        _editContext = new EditContext(NuevaFactura);
-        _messageStore = new ValidationMessageStore(_editContext);
-        
-        // Configurar manejadores de validación personalizados
-        _editContext.OnValidationRequested += HandleValidationRequested;
-        _editContext.OnFieldChanged += HandleFieldChanged;
-    }
-
-    protected void HandleValidationRequested(object? sender, ValidationRequestedEventArgs args)
-    {
-        if (_messageStore == null || _editContext == null) return;
-        
-        _messageStore.Clear();
-        ValidateModel();
-    }
-
-    protected void HandleFieldChanged(object? sender, FieldChangedEventArgs args)
-    {
-        if (_messageStore == null || _editContext == null) return;
-        
-        _messageStore.Clear(args.FieldIdentifier);
-        ValidateField(args.FieldIdentifier);
-    }
-
-    private void ValidateModel()
-    {
-        if (_messageStore == null || _editContext == null) return;
-        
-        // Validaciones específicas de la factura
-        if (NuevaFactura.ClienteId <= 0)
-        {
-            _messageStore.Add(_editContext.Field(nameof(NuevaFactura.ClienteId)), 
-                Constants.Mensajes.DatosRequeridos + ": Cliente");
-        }
-        
-        if (NuevaFactura.Detalles?.Any() != true)
-        {
-            _messageStore.Add(_editContext.Field(nameof(NuevaFactura.Detalles)), 
-                "Debe agregar al menos un artículo");
-        }
-        
-        // También validamos con DataAnnotations
-        var validationContext = new System.ComponentModel.DataAnnotations.ValidationContext(NuevaFactura);
-        var validationResults = new List<System.ComponentModel.DataAnnotations.ValidationResult>();
-        System.ComponentModel.DataAnnotations.Validator.TryValidateObject(
-            NuevaFactura, validationContext, validationResults, true);
-        
-        foreach (var validationResult in validationResults)
-        {
-            if (validationResult.MemberNames != null)
-            {
-                foreach (var memberName in validationResult.MemberNames)
-                {
-                    _messageStore.Add(_editContext.Field(memberName), validationResult.ErrorMessage ?? "Error de validación");
-                }
-            }
-        }
-        
-        _editContext.NotifyValidationStateChanged();
-    }
-
-    private void ValidateField(in FieldIdentifier fieldIdentifier)
-    {
-        if (_messageStore == null || _editContext == null) return;
-        
-        // Validaciones específicas para campos individuales
-        if (fieldIdentifier.FieldName == nameof(NuevaFactura.ClienteId) && NuevaFactura.ClienteId <= 0)
-        {
-            _messageStore.Add(fieldIdentifier, Constants.Mensajes.DatosRequeridos + ": Cliente");
-        }
-        
-        if (fieldIdentifier.FieldName == nameof(NuevaFactura.Detalles) && NuevaFactura.Detalles?.Any() != true)
-        {
-            _messageStore.Add(fieldIdentifier, "Debe agregar al menos un artículo");
-        }
-        
-        // Validación de DataAnnotations para el campo específico
-        var propertyInfo = fieldIdentifier.Model.GetType().GetProperty(fieldIdentifier.FieldName);
-        if (propertyInfo != null)
-        {
-            var propertyValue = propertyInfo.GetValue(fieldIdentifier.Model);
-            var validationContext = new System.ComponentModel.DataAnnotations.ValidationContext(fieldIdentifier.Model)
-            {
-                MemberName = fieldIdentifier.FieldName
-            };
-            
-            var validationResults = new List<System.ComponentModel.DataAnnotations.ValidationResult>();
-            System.ComponentModel.DataAnnotations.Validator.TryValidateProperty(
-                propertyValue, validationContext, validationResults);
-            
-            foreach (var validationResult in validationResults)
-            {
-                _messageStore.Add(fieldIdentifier, validationResult.ErrorMessage ?? "Error de validación");
-            }
-        }
-        
-        _editContext.NotifyValidationStateChanged();
-    }
-
-   private async Task HandleDetallesChanged(List<FacturaDetalleDto> detalles)
-    {
-        await OnDetallesChanged(detalles);
-    }
-
-    private async Task OnClienteSelectedHandler()
-{
-    // El componente SelectCliente ya actualiza el Value automáticamente
-    // Solo necesitamos actualizar nuestro objeto local
-    if (NuevaFactura.ClienteId > 0)
-    {
-        // Buscar el cliente en la lista del componente
-        // o usar el servicio para obtenerlo
-        try
-        {
-            var result = await ClienteService.GetById(NuevaFactura.ClienteId);
-            if (result.Success && result.Data != null)
-            {
-                ClienteSeleccionado = result.Data;
-            }
-        }
-        catch (Exception)
-        {
-            // Manejar error silenciosamente
-        }
-
-        if (_editContext != null)
-        {
-            _editContext.NotifyFieldChanged(_editContext.Field(nameof(NuevaFactura.ClienteId)));
-        }
-        await CalculateTotals();
-    }
-}
 
     private async Task OnDetallesChanged(List<FacturaDetalleDto> detalles)
     {
@@ -756,12 +547,6 @@
             ArticuloNombre = d.ArticuloNombre,
             StockDisponible = d.StockActual
         }).ToList();
-
-        // Notificar cambio de campo para validación
-        if (_editContext != null)
-        {
-            _editContext.NotifyFieldChanged(_editContext.Field(nameof(NuevaFactura.Detalles)));
-        }
 
         await CalculateTotals();
         StateHasChanged();
@@ -817,72 +602,65 @@
         };
     }
     
-    // Método para los botones
-   private async Task SaveFacturaAsync()
-{
-    if (_editContext == null || IsSaving || !IsFormValid) return;
-    
-    // Validar el formulario usando el EditContext
-    if (!_editContext.Validate())
+    private async Task SaveFacturaAsync()
     {
-        return;
-    }
+        if (IsSaving || !IsFormValid) return;
 
-    try
-    {
-        IsSaving = true;
-        StateHasChanged();
-
-        if (!ValidateForm())
+        try
         {
-            IsSaving = false;
+            IsSaving = true;
             StateHasChanged();
-            return;
+
+            if (!ValidateForm())
+            {
+                IsSaving = false;
+                StateHasChanged();
+                return;
+            }
+
+            var result = await FacturaService.Create(NuevaFactura);
+
+            if (result.Success && result.Data != null)
+            {
+                AlertComponent?.Show(
+                    $"Factura creada exitosamente. Número de factura: {result.Data.NumeroFactura}",
+                    AlertType.Success,
+                    "¡Éxito!"
+                );
+
+                await Task.Delay(2000);
+                Navigation.NavigateTo($"/facturas/{result.Data.Id}");
+            }
+            else
+            {
+                AlertComponent?.Show(
+                    result.Message ?? "Error al crear la factura",
+                    AlertType.Danger,
+                    "Error"
+                );
+            }
         }
-
-        var result = await FacturaService.Create(NuevaFactura);
-
-        if (result.Success && result.Data != null)
+        catch (Exception ex)
         {
             AlertComponent?.Show(
-                $"Factura creada exitosamente. Número de factura: {result.Data.NumeroFactura}",
-                AlertType.Success,
-                "¡Éxito!"
-            );
-
-            await Task.Delay(2000);
-            Navigation.NavigateTo($"/facturas/{result.Data.Id}");
-        }
-        else
-        {
-            AlertComponent?.Show(
-                result.Message ?? "Error al crear la factura",
+                $"Error inesperado: {ex.Message}",
                 AlertType.Danger,
                 "Error"
             );
         }
+        finally
+        {
+            IsSaving = false;
+            StateHasChanged();
+        }
     }
-    catch (Exception ex)
-    {
-        AlertComponent?.Show(
-            $"Error inesperado: {ex.Message}",
-            AlertType.Danger,
-            "Error"
-        );
-    }
-    finally
-    {
-        IsSaving = false;
-        StateHasChanged();
-    }
-}
 
     private bool ValidateForm()
     {
         var isValid = true;
         var errors = new List<string>();
 
-        // Validar cliente usando ValidationHelper
+        // Validar cliente
         if (NuevaFactura.ClienteId <= 0)
         {
             errors.Add(Constants.Mensajes.DatosRequeridos + ": Cliente");
@@ -977,29 +755,4 @@
             }
         }
     }
-
-    private string? GetFieldError(string fieldName)
-    {
-        // Implementar lógica de errores de validación personalizada
-        if (_messageStore != null && _editContext != null)
-        {
-            var fieldIdentifier = _editContext.Field(fieldName);
-            var errors = _messageStore[fieldIdentifier];
-            
-            return errors?.FirstOrDefault();
-        }
-        
-        return null;
-    }
-
-    public void Dispose()
-    {
-        // Eliminar manejadores de eventos para evitar fugas de memoria
-        if (_editContext != null)
-        {
-            _editContext.OnValidationRequested -= HandleValidationRequested;
-            _editContext.OnFieldChanged -= HandleFieldChanged;
-        }
-    }
-  
 }

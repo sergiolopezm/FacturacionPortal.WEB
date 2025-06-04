@@ -1,4 +1,6 @@
 ﻿@using FacturacionPortal.WEB.Util
+@inject IJSRuntime JSRuntime
+
 @if (IsVisible && (!string.IsNullOrEmpty(Message) || ChildContent != null))
 {
     <div class="alert @GetAlertClass() @(IsDismissible ? "alert-dismissible" : "") fade show @CssClass custom-alert" role="alert">
@@ -116,6 +118,28 @@
     .alert-dark {
         border-left-color: var(--bs-dark);
     }
+
+    /* Estilo para resaltar la alerta al aparecer */
+    .alert-highlight {
+        animation: pulse 1s;
+    }
+
+    @@keyframes pulse {
+        0%
+
+    {
+        box-shadow: 0 0 0 0 rgba(0, 123, 255, 0.7);
+    }
+
+    70% {
+        box-shadow: 0 0 0 10px rgba(0, 123, 255, 0);
+    }
+
+    100% {
+        box-shadow: 0 0 0 0 rgba(0, 123, 255, 0);
+    }
+
+    }
 </style>
 
 @code {
@@ -203,19 +227,53 @@
         };
     }
 
-    public void Show(string message, AlertType type = AlertType.Info, string? title = null)
+    // Método para obtener el título predeterminado según el tipo de alerta
+    private string GetDefaultTitle(AlertType type)
+    {
+        return type switch
+        {
+            AlertType.Success => "¡Éxito!",
+            AlertType.Danger => "Error",
+            AlertType.Warning => "Advertencia",
+            AlertType.Info => "Información",
+            AlertType.Primary => "Información",
+            AlertType.Secondary => "Información",
+            AlertType.Light => "Información",
+            AlertType.Dark => "Información",
+            _ => "Información"
+        };
+    }
+
+    public async Task Show(string message, AlertType type = AlertType.Info, string? title = null)
     {
         Message = message;
         Type = type;
-        Title = title;
+        Title = title ?? GetDefaultTitle(type);
         IsVisible = true;
+        StateHasChanged();
+
+        // Hacer scroll hacia la alerta
+        await JSRuntime.InvokeVoidAsync("scrollToAlert");
 
         if (AutoHide)
         {
-            SetAutoHideTimer();
+            await StartHideTimer();
         }
+    }
 
-        StateHasChanged();
+    // Implementación del método StartHideTimer
+    private async Task StartHideTimer()
+    {
+        _autoHideTimer?.Dispose();
+        _autoHideTimer = new Timer(async _ =>
+        {
+            await InvokeAsync(async () =>
+            {
+                await Dismiss();
+            });
+        }, null, AutoHideDelay, Timeout.Infinite);
+
+        await Task.CompletedTask;
     }
 
     public void Hide()
@@ -230,3 +288,23 @@
         _autoHideTimer?.Dispose();
     }
 }
+
+<script>
+    window.scrollToAlert = function() {
+        // Buscar la alerta en la página
+        const alertElement = document.querySelector('.custom-alert');
+        if (alertElement) {
+            // Scroll suave hacia la alerta
+            alertElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+            // Agregar efecto de destacado
+            alertElement.classList.add('alert-highlight');
+            setTimeout(() => {
+                alertElement.classList.remove('alert-highlight');
+            }, 1000);
+        } else {
+            // Si no se encuentra la alerta, hacer scroll al inicio de la página
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+    };
+</script>
