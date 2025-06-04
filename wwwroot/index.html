@@ -23,9 +23,23 @@
             padding: 20px;
             color: white;
             text-align: center;
-            position: relative;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 9999;
             overflow: hidden;
+            opacity: 1;
+            visibility: visible;
+            transition: opacity 0.6s ease-out, visibility 0.6s ease-out;
         }
+
+            .loading-app.hidden {
+                opacity: 0;
+                visibility: hidden;
+                pointer-events: none;
+            }
 
         .loading-logo {
             width: 100px;
@@ -134,7 +148,14 @@
         body {
             margin: 0;
             padding: 0;
-            transition: opacity 0.5s ease-in-out;
+            opacity: 1;
+        }
+
+        /* Contenedor de la aplicación Blazor */
+        #app {
+            min-height: 100vh;
+            position: relative;
+            z-index: 1;
         }
 
         /* Estilo para mensaje de error */
@@ -144,6 +165,7 @@
             box-shadow: 0 2px 15px rgba(0, 0, 0, 0.2);
             border-radius: 5px 5px 0 0;
             font-weight: 500;
+            z-index: 10000;
         }
 
             #blazor-error-ui a {
@@ -159,26 +181,28 @@
 </head>
 
 <body>
-    <div id="app">
-        <div class="loading-app">
-            <!-- Elementos de fondo -->
-            <div class="bg-shape bg-shape-1"></div>
-            <div class="bg-shape bg-shape-2"></div>
-            <div class="bg-shape bg-shape-3"></div>
+    <!-- Contenedor de la aplicación Blazor -->
+    <div id="app"></div>
 
-            <div class="loading-logo">
-                <i class="bi bi-receipt-cutoff"></i>
-            </div>
-            <h2>FacturacionPortal</h2>
+    <!-- Pantalla de carga -->
+    <div id="loading-screen" class="loading-app">
+        <!-- Elementos de fondo -->
+        <div class="bg-shape bg-shape-1"></div>
+        <div class="bg-shape bg-shape-2"></div>
+        <div class="bg-shape bg-shape-3"></div>
 
-            <div class="loading-progress">
-                <div class="spinner-border text-primary" role="status">
-                    <span class="visually-hidden">Cargando...</span>
-                </div>
-            </div>
-
-            <p>Iniciando el sistema de facturación...</p>
+        <div class="loading-logo">
+            <i class="bi bi-receipt-cutoff"></i>
         </div>
+        <h2>FacturacionPortal</h2>
+
+        <div class="loading-progress">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Cargando...</span>
+            </div>
+        </div>
+
+        <p>Iniciando el sistema de facturación...</p>
     </div>
 
     <div id="blazor-error-ui">
@@ -194,6 +218,65 @@
     <script src="js/clientInfo.js"></script>
     <script src="js/auth.js"></script>
     <script>
+        // Estado de la aplicación
+        let blazorInitialized = false;
+        let authStateResolved = false;
+
+        // Función para ocultar la pantalla de carga
+        function hideLoadingScreen() {
+            const loadingScreen = document.getElementById('loading-screen');
+            if (loadingScreen && blazorInitialized && authStateResolved) {
+                loadingScreen.classList.add('hidden');
+
+                // Eliminamos el elemento después de la transición
+                setTimeout(() => {
+                    if (loadingScreen && loadingScreen.parentNode) {
+                        loadingScreen.parentNode.removeChild(loadingScreen);
+                    }
+                }, 600);
+            }
+        }
+
+        // Iniciar Blazor
+        Blazor.start().then(async () => {
+            blazorInitialized = true;
+
+            // Esperar a que la autenticación se resuelva
+            if (window.authService && window.authService.waitForAuthStateResolved) {
+                try {
+                    await window.authService.waitForAuthStateResolved();
+                    authStateResolved = true;
+                } catch (error) {
+                    console.error('Error esperando autenticación:', error);
+                    authStateResolved = true; // Continuar aunque falle
+                }
+            } else {
+                // Si no hay servicio de autenticación, marcar como resuelto
+                authStateResolved = true;
+            }
+
+            // Ocultar pantalla de carga
+            hideLoadingScreen();
+        }).catch(error => {
+            console.error('Error iniciando Blazor:', error);
+            // En caso de error, ocultar pantalla de carga después de un tiempo
+            setTimeout(() => {
+                blazorInitialized = true;
+                authStateResolved = true;
+                hideLoadingScreen();
+            }, 3000);
+        });
+
+        // Timeout de seguridad - máximo 10 segundos
+        setTimeout(() => {
+            if (!blazorInitialized || !authStateResolved) {
+                console.warn('Timeout alcanzado, ocultando pantalla de carga');
+                blazorInitialized = true;
+                authStateResolved = true;
+                hideLoadingScreen();
+            }
+        }, 10000);
+
         window.initializeTooltips = () => {
             var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
             tooltipTriggerList.forEach(function (tooltipTriggerEl) {
@@ -207,11 +290,6 @@
                 new bootstrap.Popover(popoverTriggerEl);
             });
         };
-
-        // Añadir efecto de transición suave al cargar
-        document.addEventListener('DOMContentLoaded', () => {
-            document.body.style.opacity = '1';
-        });
     </script>
 
     <!-- Script para cargar appsettings.json -->
