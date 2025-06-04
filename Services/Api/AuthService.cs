@@ -62,6 +62,9 @@ namespace FacturacionPortal.WEB.Services.Api
                             // Almacenar el token en el localStorage
                             await _localStorage.SetItemAsync("authToken", resultado.Token);
                             await _localStorage.SetItemAsync("refreshToken", resultado.RefreshToken);
+                            
+                            // Guardar el ID del usuario en localStorage
+                            await _localStorage.SetItemAsync("usuarioId", resultado.Usuario.Id.ToString());
 
                             // Notificar al proveedor de autenticación que el estado ha cambiado
                             var authStateProvider = _authStateProvider as JwtAuthenticationStateProvider;

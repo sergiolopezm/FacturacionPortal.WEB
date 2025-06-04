@@ -1,12 +1,10 @@
-﻿using Microsoft.AspNetCore.Components.Authorization;
+﻿using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Authorization;
+using Microsoft.JSInterop;
 using System.Net;
 using System.Net.Http.Headers;
-using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
-using FacturacionPortal.WEB.Util;
-using Microsoft.AspNetCore.Components;
-using Microsoft.JSInterop;
 
 namespace FacturacionPortal.WEB.Helpers
 {
@@ -38,6 +36,10 @@ namespace FacturacionPortal.WEB.Helpers
         {
             try
             {
+                // Agregar encabezados fijos para la API
+                request.Headers.Add("Sitio", "FacturacionPortal");
+                request.Headers.Add("Clave", "Factura123");
+
                 // Agregar token de autenticación si existe
                 var token = await _localStorage.GetItemAsync<string>("authToken");
                 if (!string.IsNullOrEmpty(token))
@@ -45,7 +47,14 @@ namespace FacturacionPortal.WEB.Helpers
                     request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
                 }
 
-                // Agregar headers adicionales
+                // Agregar UsuarioId si existe
+                var usuarioId = await _localStorage.GetItemAsync<string>("usuarioId");
+                if (!string.IsNullOrEmpty(usuarioId))
+                {
+                    request.Headers.Add("UsuarioId", usuarioId);
+                }
+
+                // Agregar headers estándar
                 request.Headers.Add("X-Requested-With", "XMLHttpRequest");
 
                 if (!request.Headers.Contains("Accept"))
