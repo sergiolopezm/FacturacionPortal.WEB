@@ -9,23 +9,21 @@
 <div class="user-dropdown dropdown">
     <AuthorizeView>
         <Authorized>
-            <button class="btn btn-link dropdown-toggle user-dropdown-toggle p-0"
+            <button class="btn dropdown-toggle user-dropdown-btn"
                     type="button"
                     data-bs-toggle="dropdown"
                     aria-expanded="false"
                     title="Opciones de usuario">
 
                 <div class="d-flex align-items-center">
-                    <div class="user-avatar me-2">
+                    <div class="avatar-icon">
                         @if (!string.IsNullOrEmpty(AvatarUrl))
                         {
                             <img src="@AvatarUrl" alt="Avatar" class="rounded-circle" width="32" height="32" />
                         }
                         else
                         {
-                            <div class="avatar-placeholder rounded-circle d-flex align-items-center justify-content-center">
-                                <i class="bi bi-person-fill"></i>
-                            </div>
+                            <i class="bi bi-person-circle"></i>
                         }
                     </div>
 
@@ -35,39 +33,39 @@
                             <div class="user-name">@GetDisplayName()</div>
                             @if (ShowRole && !string.IsNullOrEmpty(CurrentUser?.Rol))
                             {
-                                <small class="user-role text-muted">@CurrentUser.Rol</small>
+                                <div class="user-role">@CurrentUser.Rol</div>
                             }
                         </div>
                     }
-
-                    <i class="bi bi-chevron-down ms-1"></i>
                 </div>
             </button>
 
             <ul class="dropdown-menu dropdown-menu-end @DropdownClass">
                 @if (ShowUserInfo)
                 {
-                    <li class="dropdown-header">
-                        <div class="d-flex align-items-center">
-                            <div class="user-avatar me-2">
-                                @if (!string.IsNullOrEmpty(AvatarUrl))
-                                {
-                                    <img src="@AvatarUrl" alt="Avatar" class="rounded-circle" width="40" height="40" />
-                                }
-                                else
-                                {
-                                    <div class="avatar-placeholder-lg rounded-circle d-flex align-items-center justify-content-center">
-                                        <i class="bi bi-person-fill"></i>
-                                    </div>
-                                }
-                            </div>
-                            <div class="user-details">
-                                <div class="fw-bold">@GetDisplayName()</div>
-                                <small class="text-muted">@CurrentUser?.Email</small>
-                                @if (!string.IsNullOrEmpty(CurrentUser?.Rol))
-                                {
-                                    <div><small class="badge bg-secondary">@CurrentUser.Rol</small></div>
-                                }
+                    <li>
+                        <div class="dropdown-header py-2">
+                            <div class="d-flex align-items-center">
+                                <div class="user-avatar me-2">
+                                    @if (!string.IsNullOrEmpty(AvatarUrl))
+                                    {
+                                        <img src="@AvatarUrl" alt="Avatar" class="rounded-circle" width="40" height="40" />
+                                    }
+                                    else
+                                    {
+                                        <div class="avatar-placeholder-lg rounded-circle d-flex align-items-center justify-content-center">
+                                            <i class="bi bi-person-fill"></i>
+                                        </div>
+                                    }
+                                </div>
+                                <div class="user-details">
+                                    <strong>@GetDisplayName()</strong>
+                                    <div class="small text-muted">@CurrentUser?.Email</div>
+                                    @if (!string.IsNullOrEmpty(CurrentUser?.Rol))
+                                    {
+                                        <div><small class="badge bg-secondary">@CurrentUser.Rol</small></div>
+                                    }
+                                </div>
                             </div>
                         </div>
                     </li>
@@ -76,20 +74,12 @@
 
                 @if (ShowProfileOption)
                 {
-                    <li>
-                        <a class="dropdown-item" href="/perfil" @onclick="GoToProfile">
-                            <i class="bi bi-person me-2"></i>Mi Perfil
-                        </a>
-                    </li>
+                    <li><a class="dropdown-item" href="/perfil" @onclick="GoToProfile"><i class="bi bi-person me-2"></i>Mi Perfil</a></li>
                 }
 
                 @if (ShowSettingsOption)
                 {
-                    <li>
-                        <a class="dropdown-item" href="/configuracion" @onclick="GoToSettings">
-                            <i class="bi bi-gear me-2"></i>Configuración
-                        </a>
-                    </li>
+                    <li><a class="dropdown-item" href="/configuracion" @onclick="GoToSettings"><i class="bi bi-gear me-2"></i>Configuración</a></li>
                 }
 
                 @if (AdditionalMenuItems != null)
@@ -103,7 +93,7 @@
                 }
 
                 <li>
-                    <button class="dropdown-item" @onclick="Logout" disabled="@IsLoggingOut">
+                    <button class="dropdown-item text-danger" @onclick="Logout" disabled="@IsLoggingOut">
                         @if (IsLoggingOut)
                         {
                             <span class="spinner-border spinner-border-sm me-2"></span>
@@ -119,35 +109,79 @@
         </Authorized>
 
         <NotAuthorized>
-            <div class="d-flex align-items-center gap-2">
-                <a href="/login" class="btn btn-outline-primary btn-sm">
-                    <i class="bi bi-box-arrow-in-right me-1"></i>Iniciar Sesión
-                </a>
-            </div>
+            <a href="/login" class="btn login-btn">
+                <i class="bi bi-box-arrow-in-right me-2"></i>Iniciar Sesión
+            </a>
         </NotAuthorized>
     </AuthorizeView>
 </div>
 
 <style>
-    .user-dropdown-toggle {
-        border: none !important;
-        color: inherit !important;
-        text-decoration: none !important;
+    .user-dropdown {
+        height: 100%;
+        display: flex;
+        align-items: center;
     }
 
-        .user-dropdown-toggle:hover,
-        .user-dropdown-toggle:focus {
-            color: inherit !important;
-            text-decoration: none !important;
-            background-color: rgba(0,0,0,0.1) !important;
+    .user-dropdown-btn {
+        display: flex;
+        align-items: center;
+        padding: 0.25rem 0.5rem;
+        color: white;
+        background-color: rgba(255, 255, 255, 0.1);
+        border: none;
+        border-radius: 4px;
+        height: 2.25rem;
+        transition: all 0.2s;
+    }
+
+        .user-dropdown-btn:hover,
+        .user-dropdown-btn:focus {
+            color: white;
+            background-color: rgba(255, 255, 255, 0.2);
         }
+
+    .avatar-icon {
+        width: 32px;
+        height: 32px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        color: white;
+        font-size: 22px;
+        margin-right: 8px;
+    }
+
+    .user-info {
+        text-align: left;
+        line-height: 1.2;
+        margin-right: 0.5rem;
+    }
+
+    .user-name {
+        font-size: 0.875rem;
+        font-weight: 500;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 150px;
+    }
+
+    .user-role {
+        font-size: 0.75rem;
+        opacity: 0.8;
+    }
 
     .avatar-placeholder {
         width: 32px;
         height: 32px;
-        background-color: var(--bs-secondary);
+        background-color: rgba(255, 255, 255, 0.2);
         color: white;
         font-size: 14px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
     }
 
     .avatar-placeholder-lg {
@@ -158,49 +192,84 @@
         font-size: 16px;
     }
 
-    .user-name {
-        font-size: 0.875rem;
-        font-weight: 500;
-        line-height: 1.2;
-    }
-
-    .user-role {
-        font-size: 0.75rem;
-        line-height: 1;
+    .dropdown-menu {
+        min-width: 220px;
+        padding: 0.5rem 0;
+        box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+        border: 1px solid rgba(0, 0, 0, 0.05);
     }
 
     .dropdown-header {
-        padding: 0.75rem 1rem;
         background-color: var(--bs-light);
+        padding: 0.75rem 1rem;
     }
 
     .user-details {
         min-width: 0;
-        flex: 1;
+        flex-grow: 1;
+        overflow: hidden;
     }
 
-        .user-details .fw-bold {
+        .user-details strong {
             font-size: 0.875rem;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
+            display: block;
         }
 
     .dropdown-item {
+        padding: 0.5rem 1rem;
         display: flex;
         align-items: center;
-        padding: 0.5rem 1rem;
     }
+
+        .dropdown-item:active {
+            background-color: var(--bs-primary);
+        }
 
         .dropdown-item:disabled {
             opacity: 0.6;
             pointer-events: none;
         }
 
-    @@media (max-width: 768px) {
-        .user-info {
-            display: none !important;
+        .dropdown-item.text-danger:hover {
+            background-color: rgba(220, 53, 69, 0.1);
         }
+
+        .dropdown-item.text-danger:active {
+            background-color: rgba(220, 53, 69, 0.2);
+            color: #dc3545;
+        }
+
+    .login-btn {
+        color: white;
+        background-color: rgba(255, 255, 255, 0.1);
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        border-radius: 4px;
+        transition: all 0.2s;
+        font-size: 0.875rem;
+        padding: 0.25rem 0.75rem;
+    }
+
+        .login-btn:hover {
+            background-color: rgba(255, 255, 255, 0.2);
+            color: white;
+        }
+
+    /* Estilos responsivos */
+    @@media (max-width: 767.98px) {
+        .avatar-icon
+
+    {
+        margin-right: 0;
+    }
+
+    .dropdown-menu {
+        width: 100vw;
+        max-width: 300px;
+    }
+
     }
 </style>
 
