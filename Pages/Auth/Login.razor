@@ -414,15 +414,36 @@
         try
         {
             var isAuthenticated = await AuthService.IsAuthenticated();
+            
+            // Si hay token pero es inválido, primero intentamos limpiarlo
             if (isAuthenticated)
             {
-                var returnUrl = GetReturnUrl();
-                Navigation.NavigateTo(returnUrl, true);
+                try 
+                {
+                    var profileResult = await AuthService.GetProfile();
+                    if (!profileResult.Success)
+                    {
+                        // Si el token existe pero no podemos obtener el perfil,
+                        // probablemente el token es inválido, así que lo eliminamos
+                        await AuthService.Logout();
+                        return;
+                    }
+                    
+                    // Si llegamos aquí, el token es válido - navegar al dashboard
+                    var returnUrl = GetReturnUrl();
+                    Navigation.NavigateTo(returnUrl, true);
+                }
+                catch
+                {
+                    // Si hay error al validar el token, cerramos sesión para eliminar tokens inválidos
+                    await AuthService.Logout();
+                }
             }
         }
         catch
         {
-            // Si hay error verificando autenticación, continuar con login
+            // Si hay error verificando autenticación, limpiar el token
+            await AuthService.Logout();
         }
     }
 

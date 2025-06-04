@@ -1,31 +1,122 @@
 ﻿@using FacturacionPortal.WEB.Util
-@if (IsVisible)
+@if (IsVisible && (!string.IsNullOrEmpty(Message) || ChildContent != null))
 {
-    <div class="alert @GetAlertClass() @(IsDismissible ? "alert-dismissible" : "") fade show @CssClass" role="alert">
-        @if (!string.IsNullOrEmpty(Icon))
-        {
-            <i class="@Icon me-2"></i>
-        }
+    <div class="alert @GetAlertClass() @(IsDismissible ? "alert-dismissible" : "") fade show @CssClass custom-alert" role="alert">
+        <div class="alert-wrapper">
+            <div class="alert-icon-wrapper">
+                @if (!string.IsNullOrEmpty(Icon))
+                {
+                    <i class="@Icon alert-custom-icon"></i>
+                }
+            </div>
 
-        @if (!string.IsNullOrEmpty(Title))
-        {
-            <h6 class="alert-heading mb-1">@Title</h6>
-        }
+            <div class="alert-content-wrapper">
+                @if (!string.IsNullOrEmpty(Title))
+                {
+                    <h6 class="alert-heading mb-1">@Title</h6>
+                }
 
-        <div class="alert-content">
-            @if (!string.IsNullOrEmpty(Message))
-            {
-                @Message
-            }
-            @ChildContent
+                <div class="alert-content">
+                    @if (!string.IsNullOrEmpty(Message))
+                    {
+                        @Message
+                    }
+                    @ChildContent
+                </div>
+            </div>
         </div>
 
         @if (IsDismissible)
         {
-            <button type="button" class="btn-close" @onclick="Dismiss" aria-label="Close"></button>
+            <button type="button" class="btn-close custom-btn-close" @onclick="Dismiss" aria-label="Close"></button>
         }
     </div>
 }
+
+<style>
+    .custom-alert {
+        position: relative;
+        display: flex;
+        align-items: center;
+        padding: 1rem 1.25rem;
+        border-radius: 0.5rem;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        border-left-width: 4px;
+    }
+
+    .alert-wrapper {
+        display: flex;
+        width: 100%;
+        align-items: flex-start;
+    }
+
+    .alert-icon-wrapper {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-right: 1rem;
+        flex-shrink: 0;
+    }
+
+    .alert-custom-icon {
+        font-size: 1.5rem;
+        line-height: 1;
+    }
+
+    .alert-content-wrapper {
+        flex-grow: 1;
+        min-width: 0;
+    }
+
+    .alert-content {
+        word-wrap: break-word;
+    }
+
+    .custom-btn-close {
+        position: absolute;
+        right: 1rem;
+        top: 1rem;
+        opacity: 0.7;
+        transition: opacity 0.2s ease-in-out;
+    }
+
+        .custom-btn-close:hover {
+            opacity: 1;
+        }
+
+    /* Mejora los estilos específicos para cada tipo de alerta */
+    .alert-success {
+        border-left-color: var(--bs-success);
+    }
+
+    .alert-danger {
+        border-left-color: var(--bs-danger);
+    }
+
+    .alert-warning {
+        border-left-color: var(--bs-warning);
+    }
+
+    .alert-info {
+        border-left-color: var(--bs-info);
+    }
+
+    .alert-primary {
+        border-left-color: var(--bs-primary);
+    }
+
+    .alert-secondary {
+        border-left-color: var(--bs-secondary);
+    }
+
+    .alert-light {
+        border-left-color: var(--bs-light);
+    }
+
+    .alert-dark {
+        border-left-color: var(--bs-dark);
+    }
+</style>
 
 @code {
     [Parameter] public AlertType Type { get; set; } = AlertType.Info;

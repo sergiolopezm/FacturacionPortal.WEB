@@ -5,6 +5,7 @@ using Microsoft.JSInterop;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.IdentityModel.Tokens.Jwt;
 
 namespace FacturacionPortal.WEB.Services.Api
 {
@@ -197,49 +198,91 @@ namespace FacturacionPortal.WEB.Services.Api
         {
             try
             {
+                // Limpiar datos de autenticación usando JavaScript
+                await _jsRuntime.InvokeVoidAsync("authService.clearAuthData");
+
                 var token = await _localStorage.GetItemAsync<string>("authToken");
-                if (string.IsNullOrEmpty(token))
-                {
-                    return (false, "No ha iniciado sesión");
-                }
-
-                _httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
-
-                var response = await _httpClient.PostAsync("api/Auth/logout", null);
-
+                
+                // Eliminar el token del localStorage sin importar el resultado de la API
                 await _localStorage.RemoveItemAsync("authToken");
+                await _localStorage.RemoveItemAsync("refreshToken");
                 await _localStorage.RemoveItemAsync("usuarioId");
                 _currentUser = null;
-
+                
                 _authStateProvider.NotifyUserLogout();
-
-                if (response.IsSuccessStatusCode)
+                
+                // Solo llamar a la API si hay token
+                if (!string.IsNullOrEmpty(token))
                 {
-                    var jsonResponse = await response.Content.ReadFromJsonAsync<JsonElement>();
-                    var mensaje = jsonResponse.GetProperty("mensaje").GetString() ?? "Sesión cerrada exitosamente";
-                    return (true, mensaje);
+                    try
+                    {
+                        _httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+                        var response = await _httpClient.PostAsync("api/Auth/logout", null);
+                        
+                        if (response.IsSuccessStatusCode)
+                        {
+                            var jsonResponse = await response.Content.ReadFromJsonAsync<JsonElement>();
+                            var mensaje = jsonResponse.GetProperty("mensaje").GetString() ?? "Sesión cerrada exitosamente";
+                            return (true, mensaje);
+                        }
+                    }
+                    catch
+                    {
+                        // Ignorar errores de la API al cerrar sesión
+                    }
                 }
-                else
-                {
-                    return (true, "Sesión cerrada localmente");
-                }
-            }
-            catch (Exception)
-            {
-                await _localStorage.RemoveItemAsync("authToken");
-                await _localStorage.RemoveItemAsync("usuarioId");
-                _currentUser = null;
-
-                _authStateProvider.NotifyUserLogout();
-
+                
                 return (true, "Sesión cerrada localmente");
+            }
+            catch (Exception ex)
+            {
+                // En caso de error, asegurarnos de eliminar los tokens localmente
+                try
+                {
+                    await _localStorage.RemoveItemAsync("authToken");
+                    await _localStorage.RemoveItemAsync("refreshToken");
+                    await _localStorage.RemoveItemAsync("usuarioId");
+                    _currentUser = null;
+                    _authStateProvider.NotifyUserLogout();
+                }
+                catch { }
+                
+                return (true, "Sesión cerrada con errores: " + ex.Message);
             }
         }
 
         public async Task<bool> IsAuthenticated()
         {
-            var token = await _localStorage.GetItemAsync<string>("authToken");
-            return !string.IsNullOrEmpty(token);
+            try
+            {
+                var token = await _localStorage.GetItemAsync<string>("authToken");
+                if (string.IsNullOrEmpty(token))
+                    return false;
+                
+                // Verificar que el token no esté vencido
+                var handler = new JwtSecurityTokenHandler();
+                var jwtToken = handler.ReadJwtToken(token);
+                var expiration = jwtToken.ValidTo;
+                
+                // Si el token ha expirado, eliminarlo
+                if (expiration < DateTime.UtcNow)
+                {
+                    await _localStorage.RemoveItemAsync("authToken");
+                    await _localStorage.RemoveItemAsync("refreshToken");
+                    await _localStorage.RemoveItemAsync("usuarioId");
+                    return false;
+                }
+                
+                return true;
+            }
+            catch
+            {
+                // Si hay error al leer el token (formato inválido), eliminarlo
+                await _localStorage.RemoveItemAsync("authToken");
+                await _localStorage.RemoveItemAsync("refreshToken");
+                await _localStorage.RemoveItemAsync("usuarioId");
+                return false;
+            }
         }
 
         public UsuarioPerfilDto? GetCurrentUser()
